@@ -1,0 +1,25 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Zertifikate, Keys, Keystores — niemals ins Repo
+*.p12
+*.pfx
+*.pem
+*.crt
+*.key
+*.mobileprovision
+
+# macOS
+.DS_Store
