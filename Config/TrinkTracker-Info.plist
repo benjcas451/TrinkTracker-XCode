@@ -28,7 +28,9 @@
 	<true/>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Nunito-Variable.ttf</string>
+		<string>Figtree-Regular.ttf</string>
+		<string>Figtree-Medium.ttf</string>
+		<string>Figtree-SemiBold.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

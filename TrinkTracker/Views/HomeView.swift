@@ -1,90 +1,79 @@
 import SwiftUI
 import UIKit
 
-/// Screen 1 „Heute" (Spec 5): Familienübersicht, Nutzerwahl,
+/// Ansicht „Heute“ (Spec 5, Screen 1): Tagesmengen der Familie, Nutzerwahl,
 /// Favoriten-Schnellwahl, neuer Eintrag, Liste heute & gestern.
+/// Aufbau wie die Web-App (Minze & Honig 2.0); Kopf und Segmentschalter
+/// liegen in `RootView`.
 struct HomeView: View {
     @Environment(AppStore.self) private var store
     @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
 
     @State private var textPrompt: TextPrompt?
     @State private var confirmPrompt: ConfirmPrompt?
     @State private var showCreateFavorite = false
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Heute").trinkText(.headlineMedium).foregroundStyle(c.textStrong)
-                    Spacer()
-                    if store.loading { ProgressView().controlSize(.small) }
-                }
-                .padding(.bottom, TrinkSpacing.lg)
+        VStack(alignment: .leading, spacing: 0) {
+            OfflineBanner(isOffline: store.isOffline, pendingCount: store.pendingCount) {
+                Task { await store.flushQueue() }
+            }
 
-                OfflineBanner(isOffline: store.isOffline, pendingCount: store.pendingCount) {
-                    Task { await store.flushQueue() }
-                }
+            if let error = store.errorMessage {
+                MhHinweis(error, art: .fehler).padding(.bottom, Mh.abstand4)
+            }
 
-                if let error = store.errorMessage {
-                    ErrorBox(message: error).padding(.bottom, TrinkSpacing.lg)
-                }
-
-                if store.users.isEmpty {
-                    if store.supportsUserManagement {
-                        EmptyHint(
-                            title: "Lege zuerst Nutzer an",
-                            description: "Die App startet ohne vorgegebene Nutzer, Ziele oder Favoriten. Lege für jedes Familienmitglied einen Nutzer an."
-                        ) {
-                            Button("Nutzer anlegen") { textPrompt = Dialogs.createUser(store: store, toasts: toasts) }
-                                .buttonStyle(.trinkFilled)
-                        }
-                    } else {
-                        EmptyHint(
-                            title: "Lege zuerst Nutzer an",
-                            description: "In diesem Modus legt die Web-App die Nutzer an. Prüfe die Verbindung in den Einstellungen."
-                        )
+            if store.users.isEmpty {
+                if store.supportsUserManagement {
+                    MhLeer("Noch keine Nutzer. Lege für jedes Familienmitglied einen Nutzer an, danach kannst du hier Getränke eintragen.") {
+                        Button("Nutzer anlegen") { textPrompt = Dialogs.createUser(store: store, toasts: toasts) }
+                            .buttonStyle(.mhHaupt)
+                            .padding(.top, Mh.abstand2)
                     }
                 } else {
-                    SectionTitle("Familie")
-                    ForEach(store.users) { user in
-                        UserTile(
-                            user: user,
-                            stats: store.todayByUser[user.id] ?? .empty,
-                            selected: user.id == store.selectedUserId,
-                            isDefault: store.isDefaultUser(user)
-                        ) {
-                            Task { await store.selectUser(user.id) }
-                        }
-                        .padding(.bottom, TrinkSpacing.md)
-                    }
-                    userChips.padding(.top, TrinkSpacing.sm)
-                    favorites.padding(.top, TrinkSpacing.xl)
-                    NewEntryForm().padding(.top, TrinkSpacing.xl)
-                    entryList.padding(.top, TrinkSpacing.xl)
+                    MhLeer("Noch keine Nutzer. In diesem Modus legt die Web-App die Nutzer an. Prüfe die Verbindung in den Einstellungen.")
                 }
-
-                Text("Zeiten in Europe/Berlin — dieselben Tagesgrenzen wie der Server.")
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.textSecondary)
-                    .padding(.top, TrinkSpacing.xxl)
+            } else {
+                tagesmengen
+                nutzerWahl.padding(.top, Mh.abstand8)
+                favorites.padding(.top, Mh.abstand8)
+                NewEntryForm().padding(.top, Mh.abstand8)
+                entryList.padding(.top, Mh.abstand8)
             }
-            .padding(TrinkSpacing.lg)
+
+            Hinweistext("Zeiten in Europe/Berlin, mit denselben Tagesgrenzen wie der Server.")
+                .padding(.top, Mh.abstand8)
         }
-        .background(c.background)
-        .scrollDismissesKeyboard(.interactively)
-        .refreshable { await store.refresh() }
         .textPrompt($textPrompt)
         .confirmPrompt($confirmPrompt)
         .sheet(isPresented: $showCreateFavorite) { CreateFavoriteSheet() }
     }
 
-    private var userChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: TrinkSpacing.sm) {
+    // MARK: Tagesmengen
+
+    private var tagesmengen: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Abschnittskopf("Heute")
+            ForEach(Array(store.users.enumerated()), id: \.element.id) { index, user in
+                if index > 0 { MhTrennlinie() }
+                TagesZeile(
+                    user: user,
+                    stats: store.todayByUser[user.id] ?? .empty,
+                    selected: user.id == store.selectedUserId,
+                    isDefault: store.isDefaultUser(user)
+                ) {
+                    Task { await store.selectUser(user.id) }
+                }
+            }
+        }
+    }
+
+    private var nutzerWahl: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Abschnittskopf("Nutzer")
+            FlowLayout {
                 ForEach(store.users) { user in
-                    TrinkChip(label: user.name, selected: user.id == store.selectedUserId) {
+                    MhAuswahl(user.name, gewaehlt: user.id == store.selectedUserId) {
                         Task { await store.selectUser(user.id) }
                     }
                 }
@@ -92,52 +81,51 @@ struct HomeView: View {
         }
     }
 
+    // MARK: Schnellwahl (Favoriten)
+
     private var favorites: some View {
-        let c = TrinkPalette.resolve(scheme)
-        return VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("Favoriten") {
+        VStack(alignment: .leading, spacing: 0) {
+            Abschnittskopf("Schnellwahl") {
                 Button("Hinzufügen") { showCreateFavorite = true }
-                    .buttonStyle(.trinkText)
+                    .buttonStyle(.mhText)
             }
             if store.favorites.isEmpty {
-                Text("Noch keine Favoriten — ein Tipp auf „Hinzufügen“ legt eine Schnellwahl an.")
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.textSecondary)
+                Hinweistext("Noch keine Favoriten. Ein Tipp auf „Hinzufügen“ legt eine Schnellwahl an.")
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: TrinkSpacing.sm) {
-                        ForEach(store.favorites) { favorite in
-                            TrinkChip(
-                                label: "\(favorite.getraenk) · \(favorite.mengeMl) ml",
-                                tone: .favorite,
-                                action: { tapFavorite(favorite) }
-                            )
-                            // Gedrückt halten öffnet das Menü — sichtbarer als ein stiller Long-Press.
-                            .contextMenu {
-                                Button {
-                                    tapFavorite(favorite)
-                                } label: {
-                                    Label("Jetzt eintragen", systemImage: "plus.circle")
+                FlowLayout {
+                    ForEach(store.favorites) { favorite in
+                        Button {
+                            tapFavorite(favorite)
+                        } label: {
+                            HStack(alignment: .firstTextBaseline, spacing: Mh.abstand2) {
+                                Text(favorite.getraenk)
+                                    .font(.custom(MhSchrift.medium, size: 16, relativeTo: .body))
+                                    .foregroundStyle(Mh.textStrong)
+                                Text(verbatim: "\(favorite.mengeMl) ml")
+                                    .mhText(.small)
+                                    .monospacedDigit()
+                                    .foregroundStyle(Mh.textSecondary)
+                            }
+                        }
+                        .buttonStyle(.mhZweit)
+                        .accessibilityLabel(Text(verbatim: "\(favorite.getraenk), \(favorite.mengeMl) ml eintragen"))
+                        // Gedrückt halten öffnet das Menü — sichtbarer als ein stiller Long-Press.
+                        .contextMenu {
+                            Button("Jetzt eintragen") { tapFavorite(favorite) }
+                            if store.supportsUserManagement {
+                                Button("Favorit löschen", role: .destructive) {
+                                    confirmPrompt = Dialogs.deleteFavorite(favorite, store: store, toasts: toasts)
                                 }
-                                if store.supportsUserManagement {
-                                    Button(role: .destructive) {
-                                        confirmPrompt = Dialogs.deleteFavorite(favorite, store: store, toasts: toasts)
-                                    } label: {
-                                        Label("Favorit löschen", systemImage: "trash")
-                                    }
-                                } else {
-                                    Text("Löschen nur mit erweiterten Server-Actions (Einstellungen)")
-                                }
+                            } else {
+                                Text("Löschen nur mit erweiterten Server-Actions (Einstellungen)")
                             }
                         }
                     }
                 }
-                Text(store.supportsUserManagement
-                     ? "Tippen trägt ein · gedrückt halten zum Löschen. Alle Favoriten stehen auch in den Einstellungen."
-                     : "Tippen trägt ein. Löschen bietet die API in diesem Modus nur mit den erweiterten Server-Actions.")
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.textSecondary)
-                    .padding(.top, TrinkSpacing.sm)
+                Hinweistext(store.supportsUserManagement
+                    ? "Ein Tipp trägt den Favoriten sofort ein, gedrückt halten zum Löschen. Alle Favoriten stehen auch unter Nutzer."
+                    : "Ein Tipp trägt den Favoriten sofort ein. Löschen bietet die API in diesem Modus nur mit den erweiterten Server-Actions.")
+                    .padding(.top, Mh.abstand2)
             }
         }
     }
@@ -153,8 +141,9 @@ struct HomeView: View {
         }
     }
 
+    // MARK: Einträge heute & gestern
+
     private var entryList: some View {
-        let c = TrinkPalette.resolve(scheme)
         let now = Date()
         let todayKey = BerlinTime.dateKey(now)
         let yesterdayKey = BerlinTime.dateKey(now.addingTimeInterval(-86_400))
@@ -163,76 +152,143 @@ struct HomeView: View {
             let key = BerlinTime.dateKey($0.createdAt)
             return key == todayKey || key == yesterdayKey
         }
+        let heute = visible.filter { BerlinTime.dateKey($0.createdAt) == todayKey }
+        let gestern = visible.filter { BerlinTime.dateKey($0.createdAt) == yesterdayKey }
 
         return VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("Heute & gestern") {
+            Abschnittskopf("Einträge heute und gestern") {
                 Button("Rückgängig") {
                     Task { toasts.result(await store.undoLast(), success: "Letzter Eintrag entfernt") }
                 }
-                .buttonStyle(.trinkText)
+                .buttonStyle(.mhLoeschen)
                 .disabled(visible.isEmpty)
             }
             if visible.isEmpty {
-                Text("Für heute und gestern ist noch nichts erfasst.")
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.textSecondary)
+                MhLeer("Für heute und gestern ist noch nichts erfasst.")
             } else {
-                ForEach(visible) { entry in
-                    EntryRow(entry: entry, isToday: BerlinTime.dateKey(entry.createdAt) == todayKey)
-                        .padding(.bottom, TrinkSpacing.sm)
+                if !heute.isEmpty {
+                    TagesGruppe(titel: "Heute · \(BerlinTime.formatDayMonth(now))", eintraege: heute)
+                }
+                if !gestern.isEmpty {
+                    TagesGruppe(titel: "Gestern · \(BerlinTime.formatDayMonth(now.addingTimeInterval(-86_400)))", eintraege: gestern)
+                        .padding(.top, heute.isEmpty ? 0 : Mh.abstand5)
                 }
             }
         }
     }
 }
 
-private struct UserTile: View {
-    @Environment(\.colorScheme) private var scheme
+/// Tagesmenge eines Nutzers (`.tages-zeile`): Name, große Zahl dünn in
+/// Textfarbe, Balken zum Tagesziel, darunter Anzahl und Fortschritt.
+/// Ein Tipp wählt den Nutzer aus.
+private struct TagesZeile: View {
     let user: TrinkUser
     let stats: TodayStats
     let selected: Bool
     let isDefault: Bool
     let onTap: () -> Void
 
-    private var subtitle: String {
-        if stats.tageszielMl == 0 { return "\(stats.anzahl) Einträge · kein Tagesziel" }
-        if stats.zielErreicht { return "\(stats.anzahl) Einträge · Ziel erreicht (\(stats.tageszielMl) ml)" }
-        return "\(stats.anzahl) Einträge · \(stats.fortschrittPct ?? 0) % von \(stats.tageszielMl) ml"
+    private var standardText: String {
+        isDefault ? "Standardnutzer dieses Geräts" : ""
+    }
+
+    private var anzahlText: String {
+        stats.anzahl == 1 ? "1 Eintrag" : "\(stats.anzahl) Einträge"
     }
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        TrinkCard(color: selected ? (c.isDark ? c.subtle : c.successBg) : c.surface, onTap: onTap) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: TrinkSpacing.sm) {
-                    Text(user.name).trinkText(.titleMedium)
-                    if isDefault {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(c.isDark ? c.yellow300 : c.yellow900)
-                            .accessibilityLabel("Standardnutzer dieses Geräts")
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: Mh.abstand2) {
+                HStack(alignment: .firstTextBaseline, spacing: Mh.abstand3) {
+                    HStack(alignment: .center, spacing: Mh.abstand2) {
+                        if selected {
+                            MhPunkt(farbe: Mh.data1, groesse: 8)
+                        }
+                        Text(user.name)
+                            .font(.custom(MhSchrift.medium, size: 16, relativeTo: .body))
+                            .foregroundStyle(Mh.textStrong)
+                            .multilineTextAlignment(.leading)
+                        if isDefault {
+                            MhSymbol("MhStarGefuellt", groesse: Mh.symbolKlein)
+                                .foregroundStyle(Mh.textYellow)
+                        }
                     }
-                    Spacer()
-                    Text(verbatim: "\(stats.ml) ml")
-                        .trinkText(.titleLarge, tabular: true)
-                        .foregroundStyle(c.accentText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(verbatim: "\(stats.ml)")
+                            .mhText(.number)
+                            .foregroundStyle(Mh.textStrong)
+                        Text("ml")
+                            .mhText(.small)
+                            .foregroundStyle(Mh.textSecondary)
+                    }
+                    .lineLimit(1)
                 }
-                GoalProgressBar(stats: stats).padding(.top, TrinkSpacing.md)
-                Text(subtitle)
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.textSecondary)
-                    .padding(.top, TrinkSpacing.sm)
+                if stats.tageszielMl > 0 {
+                    MhBalken(
+                        anteil: Double(stats.ml) / Double(stats.tageszielMl),
+                        farbe: stats.zielErreicht ? Mh.data2 : Mh.data1
+                    )
+                }
+                HStack(alignment: .firstTextBaseline, spacing: Mh.abstand3) {
+                    Text(anzahlText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    zielText
+                }
+                .mhText(.small)
+                .monospacedDigit()
+                .foregroundStyle(Mh.textSecondary)
+            }
+            .padding(.vertical, Mh.abstand3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(standardText)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var zielText: some View {
+        if stats.tageszielMl == 0 {
+            Text("kein Tagesziel")
+        } else if stats.zielErreicht {
+            HStack(spacing: Mh.abstand1) {
+                MhSymbol("MhCheck", groesse: Mh.symbolKlein)
+                Text("Ziel erreicht")
+            }
+            .foregroundStyle(Mh.textGreen)
+        } else {
+            Text(verbatim: "\(stats.fortschrittPct ?? 0) % von \(stats.tageszielMl) ml")
+        }
+    }
+}
+
+/// Einträge eines Tages: Gruppenlabel mit Haarlinie, darunter Zeilen.
+private struct TagesGruppe: View {
+    let titel: String
+    let eintraege: [TrinkEntry]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(titel.uppercased())
+                .mhText(.caption)
+                .foregroundStyle(Mh.textTertiary)
+                .padding(.bottom, Mh.abstand1)
+                .accessibilityAddTraits(.isHeader)
+            MhTrennlinie()
+            ForEach(Array(eintraege.enumerated()), id: \.element.id) { index, entry in
+                if index > 0 { MhTrennlinie() }
+                EntryRow(entry: entry)
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
 private struct NewEntryForm: View {
     @Environment(AppStore.self) private var store
     @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     @State private var drink = "Wasser"
     @State private var amount = "250"
@@ -242,42 +298,70 @@ private struct NewEntryForm: View {
 
     private var menge: Int? { Int(amount.trimmingCharacters(in: .whitespaces)) }
 
+    /// Segment „Jetzt | Andere Uhrzeit“: „Andere Uhrzeit“ öffnet die Zeitwahl.
+    private var zeitWahl: Binding<Int> {
+        Binding(
+            get: { customTime == nil ? 0 : 1 },
+            set: { index in
+                if index == 0 {
+                    customTime = nil
+                } else {
+                    showTimePicker = true
+                }
+            }
+        )
+    }
+
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
+        let nebeneinander = !typeSize.isAccessibilitySize
+        let felder = nebeneinander
+            ? AnyLayout(HStackLayout(alignment: .top, spacing: Mh.abstand3))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: Mh.abstand4))
+
         VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("Neuer Eintrag")
-            TrinkCard {
-                VStack(alignment: .leading, spacing: TrinkSpacing.md) {
-                    TrinkTextField(label: "Getränk", text: $drink, maxLength: 60)
-                    TrinkTextField(label: "Menge", text: $amount, suffix: "ml", keyboard: .numberPad)
-                    FlowLayout {
-                        ForEach(vorwahlMengen, id: \.self) { value in
-                            TrinkChip(label: String(value), selected: menge == value) { amount = String(value) }
-                        }
-                    }
-                    HStack {
-                        Text(customTime.map { "Zeitpunkt: \(BerlinTime.formatDayMonth($0)) \(BerlinTime.formatTime($0))" } ?? "Zeitpunkt: jetzt")
-                            .trinkText(.bodySmall)
-                            .foregroundStyle(c.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if customTime == nil {
-                            Button("Andere Uhrzeit") { showTimePicker = true }.buttonStyle(.trinkText)
-                        } else {
-                            Button("Jetzt") { customTime = nil }.buttonStyle(.trinkText)
-                        }
-                    }
-                    .padding(.top, TrinkSpacing.xs)
-                    HStack(spacing: TrinkSpacing.md) {
-                        Button("Eintragen") { submit(asFavorite: false) }
-                            .buttonStyle(.trinkFilled)
-                            .frame(maxWidth: .infinity)
-                            .disabled(busy)
-                        Button("Als Favorit") { submit(asFavorite: true) }
-                            .buttonStyle(.trinkOutlined)
-                            .disabled(busy)
+            Abschnittskopf("Neuer Eintrag")
+            felder {
+                TrinkTextField(label: "Getränk", text: $drink, placeholder: "z. B. Wasser, Apfelschorle", maxLength: 60)
+                TrinkTextField(label: "Menge (ml)", text: $amount, placeholder: "z. B. 250", keyboard: .numberPad)
+                    .frame(maxWidth: nebeneinander ? 128 : CGFloat.infinity)
+            }
+
+            VStack(alignment: .leading, spacing: Mh.abstand2) {
+                FeldLabel("Klassische Größen")
+                FlowLayout {
+                    ForEach(vorwahlMengen, id: \.self) { value in
+                        MhAuswahl("\(String(value)) ml", gewaehlt: menge == value) { amount = String(value) }
                     }
                 }
             }
+            .padding(.top, Mh.abstand5)
+
+            VStack(alignment: .leading, spacing: Mh.abstand2) {
+                FeldLabel("Uhrzeit")
+                MhSegmente(optionen: ["Jetzt", "Andere Uhrzeit"], gewaehlt: zeitWahl)
+                if let customTime {
+                    HStack(alignment: .firstTextBaseline, spacing: Mh.abstand3) {
+                        Text(verbatim: "Zeitpunkt: \(BerlinTime.formatDayMonth(customTime)) \(BerlinTime.formatTime(customTime))")
+                            .mhText(.small)
+                            .monospacedDigit()
+                            .foregroundStyle(Mh.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Ändern") { showTimePicker = true }
+                            .buttonStyle(.mhText)
+                    }
+                }
+            }
+            .padding(.top, Mh.abstand5)
+
+            Button("Eintrag anlegen") { submit(asFavorite: false) }
+                .buttonStyle(MhHauptButtonStil(breit: true))
+                .disabled(busy)
+                .padding(.top, Mh.abstand6)
+            Button("Als Favorit speichern") { submit(asFavorite: true) }
+                .buttonStyle(.mhText)
+                .disabled(busy)
+                .frame(maxWidth: .infinity)
+                .padding(.top, Mh.abstand1)
         }
         .sheet(isPresented: $showTimePicker) {
             TimePickerSheet(initial: customTime ?? Date()) { picked in
@@ -315,42 +399,44 @@ private struct NewEntryForm: View {
     }
 }
 
+/// Eintragszeile (`.list-row`): Uhrzeit, Getränk, Menge, Löschen.
 private struct EntryRow: View {
     @Environment(AppStore.self) private var store
     @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
     let entry: TrinkEntry
-    let isToday: Bool
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        var parts = [isToday ? "heute" : "gestern", BerlinTime.formatTime(entry.createdAt)]
-        if entry.isPending { parts.append("wartet auf Übertragung") }
-
-        return TrinkCard(padding: .symmetric(horizontal: TrinkSpacing.lg, vertical: TrinkSpacing.sm)) {
-            HStack(spacing: TrinkSpacing.sm) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.getraenk).trinkText(.bodyLarge)
-                    Text(parts.joined(separator: " · "))
-                        .trinkText(.bodySmall)
-                        .foregroundStyle(c.textSecondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Text(verbatim: "\(entry.mengeMl) ml")
-                    .trinkText(.titleMedium, tabular: true)
-                    .foregroundStyle(c.accentText)
-                Button {
-                    Task {
-                        if let error = await store.deleteEntry(entry.id) { toasts.show(error, isError: true) }
+        HStack(alignment: .center, spacing: Mh.abstand3) {
+            Text(verbatim: BerlinTime.formatTime(entry.createdAt))
+                .mhText(.small)
+                .monospacedDigit()
+                .foregroundStyle(Mh.textSecondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.getraenk)
+                    .mhText(.body)
+                    .foregroundStyle(Mh.textStrong)
+                if entry.isPending {
+                    HStack(spacing: Mh.abstand1) {
+                        MhSymbol("MhClock", groesse: 14)
+                        Text("wartet auf Übertragung")
                     }
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundStyle(c.danger)
-                        .frame(width: TrinkSpacing.minTouch, height: TrinkSpacing.minTouch)
+                    .mhText(.small)
+                    .foregroundStyle(Mh.textSecondary)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Löschen")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(verbatim: "\(entry.mengeMl) ml")
+                .mhText(.body)
+                .monospacedDigit()
+                .foregroundStyle(Mh.text)
+                .lineLimit(1)
+            MhSymbolButton("MhTrash", beschreibung: "Eintrag löschen", farbe: Mh.textTertiary) {
+                Task {
+                    if let error = await store.deleteEntry(entry.id) { toasts.show(error, isError: true) }
+                }
             }
         }
+        .padding(.vertical, Mh.abstand1)
+        .frame(minHeight: 52)
     }
 }

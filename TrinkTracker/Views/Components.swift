@@ -1,222 +1,129 @@
 import SwiftUI
 
-/// Karte mit Border statt Schatten (Spec 7).
-struct TrinkCard<Content: View>: View {
-    @Environment(\.colorScheme) private var scheme
+// App-eigene Bausteine auf Basis von Minze & Honig 2.0 (Theme/MhTheme.swift,
+// Theme/MhBausteine.swift). Farben nur über Rollen (`Mh.*`), keine Hex-Werte.
 
-    var padding: EdgeInsets = EdgeInsets(top: TrinkSpacing.lg, leading: TrinkSpacing.lg, bottom: TrinkSpacing.lg, trailing: TrinkSpacing.lg)
-    var color: Color?
-    var onTap: (() -> Void)?
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        let shape = RoundedRectangle(cornerRadius: TrinkRadii.md, style: .continuous)
-        let card = content()
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(color ?? c.surface)
-            .clipShape(shape)
-            .overlay(shape.stroke(c.border, lineWidth: c.borderWidth))
-
-        if let onTap {
-            Button(action: onTap) { card }
-                .buttonStyle(.plain)
-        } else {
-            card
-        }
-    }
-}
-
-extension EdgeInsets {
-    static func symmetric(horizontal: CGFloat, vertical: CGFloat) -> EdgeInsets {
-        EdgeInsets(top: vertical, leading: horizontal, bottom: vertical, trailing: horizontal)
-    }
-
-    static func all(_ value: CGFloat) -> EdgeInsets {
-        EdgeInsets(top: value, leading: value, bottom: value, trailing: value)
-    }
-}
-
-struct SectionTitle<Trailing: View>: View {
+/// Abschnittskopf (`.section-title`): Caption in Versalien, Dritttextfarbe,
+/// rechts optional eine leise Aktion.
+struct Abschnittskopf<Rechts: View>: View {
     let text: String
-    @ViewBuilder var trailing: () -> Trailing
+    @ViewBuilder var rechts: () -> Rechts
 
-    init(_ text: String, @ViewBuilder trailing: @escaping () -> Trailing) {
+    init(_ text: String, @ViewBuilder rechts: @escaping () -> Rechts = { EmptyView() }) {
         self.text = text
-        self.trailing = trailing
+        self.rechts = rechts
     }
 
     var body: some View {
-        HStack(alignment: .center) {
-            Text(text)
-                .trinkText(.titleMedium)
+        HStack(alignment: .center, spacing: Mh.abstand3) {
+            Text(text.uppercased())
+                .mhText(.caption)
+                .foregroundStyle(Mh.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            trailing()
+                .accessibilityAddTraits(.isHeader)
+            rechts()
         }
-        .padding(.bottom, TrinkSpacing.sm)
+        .frame(minHeight: 24)
+        .padding(.bottom, Mh.abstand2)
     }
 }
 
-extension SectionTitle where Trailing == EmptyView {
+/// Feldlabel über einer Gruppe von Bedienelementen (wie `.field-label`).
+struct FeldLabel: View {
+    let text: String
+
     init(_ text: String) {
-        self.init(text) { EmptyView() }
+        self.text = text
     }
-}
-
-/// Fortschrittsbalken: grün-300, ab 100 % honig-300 (Spec 7).
-struct GoalProgressBar: View {
-    @Environment(\.colorScheme) private var scheme
-    let stats: TodayStats
-    var height: CGFloat = 10
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        let value = min(max(Double(stats.fortschrittPct ?? 0) / 100, 0), 1)
-        let fill = stats.zielErreicht ? c.yellow300 : c.green300
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(c.subtle)
-                Capsule().fill(fill).frame(width: geo.size.width * value)
-            }
-        }
-        .frame(height: height)
-        .accessibilityLabel(stats.fortschrittPct.map { "\($0) Prozent des Tagesziels" } ?? "Kein Tagesziel")
+        Text(text).mhText(.label).foregroundStyle(Mh.textStrong)
     }
 }
 
-/// Offline-Banner mit der Anzahl ausstehender Aktionen (Spec 5, Screen 1).
+/// Nebentext unter einem Abschnitt (`.hint`).
+struct Hinweistext: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .mhText(.small)
+            .foregroundStyle(Mh.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Auswahlzeile in Listen (Verbindung, Authentifizierung): Text links, Haken
+/// in primary bei der gewählten Option. Skaliert mit Dynamic Type.
+struct AuswahlZeile: View {
+    let text: String
+    let gewaehlt: Bool
+    let aktion: () -> Void
+
+    init(_ text: String, gewaehlt: Bool, aktion: @escaping () -> Void) {
+        self.text = text
+        self.gewaehlt = gewaehlt
+        self.aktion = aktion
+    }
+
+    var body: some View {
+        Button(action: aktion) {
+            HStack(spacing: Mh.abstand3) {
+                Text(text)
+                    .font(.custom(gewaehlt ? MhSchrift.medium : MhSchrift.regular, size: 16, relativeTo: .body))
+                    .foregroundStyle(gewaehlt ? Mh.textStrong : Mh.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if gewaehlt {
+                    MhSymbol("MhCheck").foregroundStyle(Mh.primary)
+                }
+            }
+            .padding(.vertical, Mh.abstand2)
+            .frame(minHeight: Mh.touch)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(gewaehlt ? [.isSelected] : [])
+    }
+}
+
+/// Offline-Hinweis mit der Anzahl ausstehender Aktionen (Spec 5, Screen 1).
 struct OfflineBanner: View {
-    @Environment(\.colorScheme) private var scheme
     let isOffline: Bool
     let pendingCount: Int
     var onRetry: (() -> Void)?
 
     private var text: String {
-        let aktionen = "\(pendingCount) Aktion\(pendingCount == 1 ? "" : "en") wartet auf Übertragung."
+        let aktionen = pendingCount == 1
+            ? "1 Aktion wartet auf Übertragung."
+            : "\(pendingCount) Aktionen warten auf Übertragung."
         if isOffline {
-            return pendingCount > 0 ? "Offline — letzter Stand. \(aktionen)" : "Offline — angezeigt wird der letzte erfolgreiche Stand."
+            return pendingCount > 0 ? "Offline, letzter Stand. \(aktionen)" : "Offline. Angezeigt wird der letzte erfolgreiche Stand."
         }
         return aktionen
     }
 
     var body: some View {
         if isOffline || pendingCount > 0 {
-            let c = TrinkPalette.resolve(scheme)
-            HStack(spacing: TrinkSpacing.md) {
-                Image(systemName: "icloud.slash")
-                    .font(.system(size: 18))
-                    .foregroundStyle(c.text)
-                Text(text)
-                    .trinkText(.bodySmall)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                MhHinweis(text, art: .warnung, symbol: "MhCloudOff")
                 if let onRetry {
                     Button("Erneut senden", action: onRetry)
-                        .buttonStyle(.trinkText)
+                        .buttonStyle(.mhText)
                 }
             }
-            .padding(.symmetric(horizontal: TrinkSpacing.lg, vertical: TrinkSpacing.md))
-            .background(c.warningBg)
-            .clipShape(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous).stroke(c.border, lineWidth: 1.5))
-            .padding(.bottom, TrinkSpacing.lg)
+            .padding(.bottom, Mh.abstand4)
         }
     }
 }
 
-/// Fehlerfläche mit Symbol.
-struct ErrorBox: View {
-    @Environment(\.colorScheme) private var scheme
-    let message: String
-
-    var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        HStack(alignment: .top, spacing: TrinkSpacing.md) {
-            Image(systemName: "exclamationmark.circle")
-                .font(.system(size: 18))
-                .foregroundStyle(c.danger)
-            Text(message)
-                .trinkText(.bodySmall)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(TrinkSpacing.lg)
-        .background(c.errorBg)
-        .clipShape(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous).stroke(c.border, lineWidth: 1.5))
-    }
-}
-
-enum TrinkChipTone { case neutral, favorite }
-
-/// Auswahl-Chip im Pillenformat, Mindesthöhe 44 pt.
-struct TrinkChip: View {
-    @Environment(\.colorScheme) private var scheme
-    let label: String
-    var selected = false
-    var tone: TrinkChipTone = .neutral
-    let action: () -> Void
-
-    var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        let background: Color = switch tone {
-        case .neutral: selected ? c.green300 : c.surface
-        case .favorite: c.yellow300
-        }
-        let foreground: Color = switch tone {
-        case .neutral: selected ? c.green900 : c.text
-        case .favorite: c.yellow900
-        }
-        let borderColor = (tone == .favorite || selected) ? Color.clear : c.border
-
-        Text(label)
-            .trinkText(.labelLarge, tabular: true)
-            .foregroundStyle(foreground)
-            .padding(.horizontal, TrinkSpacing.lg)
-            .frame(minHeight: TrinkSpacing.minTouch)
-            .background(background)
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(borderColor, lineWidth: c.borderWidth))
-            .contentShape(Capsule())
-            .onTapGesture(perform: action)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-/// Meldung mit Aktion für leere Zustände.
-struct EmptyHint<Action: View>: View {
-    @Environment(\.colorScheme) private var scheme
-    let title: String
-    var description: String?
-    @ViewBuilder var action: () -> Action
-
-    var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        TrinkCard(color: c.subtle) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title).trinkText(.titleMedium)
-                if let description {
-                    Text(description)
-                        .trinkText(.bodySmall)
-                        .foregroundStyle(c.textSecondary)
-                        .padding(.top, TrinkSpacing.sm)
-                }
-                action()
-                    .padding(.top, TrinkSpacing.lg)
-            }
-        }
-    }
-}
-
-extension EmptyHint where Action == EmptyView {
-    init(title: String, description: String? = nil) {
-        self.init(title: title, description: description) { EmptyView() }
-    }
-}
-
-/// Eingabefeld im Stil des Themes: Label oben, gefüllte Fläche, Border.
+/// Eingabefeld (`.field` + `input`): Label darüber, 44 pt, Radius 10,
+/// Haarlinie `borderStrong`, Grund `fieldBg`; Einheit rechts im Feld.
 struct TrinkTextField: View {
-    @Environment(\.colorScheme) private var scheme
     let label: String
     @Binding var text: String
     var placeholder = ""
@@ -230,12 +137,9 @@ struct TrinkTextField: View {
     @State private var revealed = false
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        VStack(alignment: .leading, spacing: TrinkSpacing.xs) {
-            Text(label)
-                .trinkText(.labelMedium)
-                .foregroundStyle(c.textSecondary)
-            HStack(spacing: TrinkSpacing.sm) {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).mhText(.label).foregroundStyle(Mh.textStrong)
+            HStack(spacing: Mh.abstand2) {
                 Group {
                     if secure && !revealed {
                         SecureField(placeholder, text: $text)
@@ -243,7 +147,9 @@ struct TrinkTextField: View {
                         TextField(placeholder, text: $text)
                     }
                 }
-                .trinkText(.bodyMedium)
+                .mhText(.body)
+                .foregroundStyle(Mh.text)
+                .tint(Mh.primary)
                 .keyboardType(keyboard)
                 .textInputAutocapitalization(secure || keyboard == .URL ? .never : .sentences)
                 .autocorrectionDisabled(secure || keyboard == .URL)
@@ -255,41 +161,49 @@ struct TrinkTextField: View {
                 }
                 if let suffix {
                     Text(suffix)
-                        .trinkText(.bodySmall)
-                        .foregroundStyle(c.textSecondary)
+                        .mhText(.small)
+                        .foregroundStyle(Mh.textSecondary)
                 }
                 if secure {
                     Button {
                         revealed.toggle()
                     } label: {
-                        Image(systemName: revealed ? "eye.slash" : "eye")
-                            .foregroundStyle(c.textSecondary)
-                            .frame(width: 28, height: 28)
+                        MhSymbol(revealed ? "MhEyeOff" : "MhEye")
+                            .foregroundStyle(Mh.textSecondary)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(revealed ? "Verbergen" : "Anzeigen")
                 }
             }
-            .padding(.symmetric(horizontal: TrinkSpacing.lg, vertical: TrinkSpacing.md))
-            .frame(minHeight: TrinkSpacing.minTouch)
-            .background(c.subtle)
-            .clipShape(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous))
+            .padding(.horizontal, Mh.abstand3)
+            .padding(.vertical, Mh.abstand2)
+            .frame(minHeight: Mh.touch)
+            .background(RoundedRectangle(cornerRadius: Mh.radiusMd, style: .continuous).fill(Mh.fieldBg))
             .overlay(
-                RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous)
-                    .stroke(error == nil ? c.border : c.red600, lineWidth: error == nil ? c.borderWidth : 1.5)
+                RoundedRectangle(cornerRadius: Mh.radiusMd, style: .continuous)
+                    .stroke(error == nil ? Mh.borderStrong : Mh.danger, lineWidth: 1)
             )
             if let error {
                 Text(error)
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.danger)
+                    .mhText(.small)
+                    .foregroundStyle(Mh.danger)
             }
         }
     }
 }
 
-/// Zeilenweise fließende Chips (Flutter `Wrap`).
+/// Zeilenweise fließende Elemente (Flutter `Wrap`). Ein Element, das breiter
+/// als die Zeile wäre, bekommt die Zeilenbreite angeboten (große Schrift).
 struct FlowLayout: Layout {
-    var spacing: CGFloat = TrinkSpacing.sm
+    var spacing: CGFloat = Mh.abstand2
+
+    private func groesse(_ subview: LayoutSubview, maxBreite: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard maxBreite.isFinite, maxBreite > 0, ideal.width > maxBreite else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: maxBreite, height: nil))
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
@@ -298,7 +212,7 @@ struct FlowLayout: Layout {
         var rowHeight: CGFloat = 0
         var maxX: CGFloat = 0
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = groesse(subview, maxBreite: width)
             if x > 0, x + size.width > width {
                 x = 0
                 y += rowHeight + spacing
@@ -316,7 +230,7 @@ struct FlowLayout: Layout {
         var y = bounds.minY
         var rowHeight: CGFloat = 0
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = groesse(subview, maxBreite: bounds.width)
             if x > bounds.minX, x + size.width > bounds.maxX {
                 x = bounds.minX
                 y += rowHeight + spacing
@@ -329,7 +243,7 @@ struct FlowLayout: Layout {
     }
 }
 
-// MARK: - Kurze Rückmeldungen (Flutter SnackBar)
+// MARK: - Kurze Rückmeldungen (Toast)
 
 struct Toast: Equatable, Sendable {
     let message: String
@@ -342,7 +256,7 @@ final class ToastCenter {
     private(set) var current: Toast?
     @ObservationIgnored private var hideTask: Task<Void, Never>?
 
-    /// Kurze Rückmeldung; Fehler in der Fehlerfläche, Erfolg neutral.
+    /// Kurze Rückmeldung; Fehler bleiben etwas länger stehen.
     func show(_ message: String, isError: Bool = false) {
         hideTask?.cancel()
         withAnimation(.easeOut(duration: 0.2)) {
@@ -361,29 +275,37 @@ final class ToastCenter {
     }
 }
 
+/// Toast (`.toast`): dunkel auf hell bzw. hell auf dunkel, unten mittig.
 struct ToastOverlay: View {
-    @Environment(\.colorScheme) private var scheme
     let toast: Toast?
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
         VStack {
             Spacer()
             if let toast {
-                Text(toast.message)
-                    .trinkText(.bodyMedium)
-                    .foregroundStyle(c.text)
-                    .padding(.symmetric(horizontal: TrinkSpacing.lg, vertical: TrinkSpacing.md))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(toast.isError ? c.errorBg : c.successBg)
-                    .clipShape(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous).stroke(c.border, lineWidth: 1.5))
-                    .padding(.horizontal, TrinkSpacing.lg)
-                    .padding(.bottom, TrinkSpacing.sm)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .accessibilityAddTraits(.isStaticText)
+                HStack(alignment: .top, spacing: Mh.abstand2) {
+                    MhSymbol(toast.isError ? "MhAlert" : "MhCheck", groesse: Mh.symbolKlein)
+                        .padding(.top, 2)
+                    Text(toast.message)
+                        .mhText(.small)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(Mh.bg)
+                .padding(.horizontal, Mh.abstand4)
+                .padding(.vertical, Mh.abstand3)
+                .background(
+                    RoundedRectangle(cornerRadius: Mh.radiusMd, style: .continuous)
+                        .fill(Mh.textStrong)
+                        .shadow(color: Color.black.opacity(0.08), radius: 10, y: 6)
+                )
+                .padding(.horizontal, Mh.rand)
+                .padding(.bottom, Mh.abstand2)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isStaticText)
             }
         }
+        .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
     }
 }

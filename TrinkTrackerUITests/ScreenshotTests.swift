@@ -18,7 +18,7 @@ final class ScreenshotTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-MhBildschirmfotos", "1"]
         app.launch()
-        _ = app.staticTexts["Anna"].firstMatch.waitForExistence(timeout: 15)
+        _ = app.buttons["Anna"].firstMatch.waitForExistence(timeout: 15)
 
         foto(app, "01-heute")
         app.swipeUp()
@@ -35,6 +35,21 @@ final class ScreenshotTests: XCTestCase {
         nachOben(app)
         tippe(app.buttons["Einstellungen"].firstMatch)
         foto(app, "06-einstellungen")
+        app.swipeUp()
+        foto(app, "07-einstellungen-weiter")
+
+        zurueck(app)
+        tippe(app.buttons["Nutzer verwalten"].firstMatch)
+        foto(app, "08-nutzer")
+    }
+
+    @MainActor
+    private func zurueck(_ app: XCUIApplication) {
+        let knopf = app.navigationBars.buttons.firstMatch
+        if knopf.waitForExistence(timeout: 3) {
+            knopf.tap()
+        }
+        sleep(1)
     }
 
     @MainActor
