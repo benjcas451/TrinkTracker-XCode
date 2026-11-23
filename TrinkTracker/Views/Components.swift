@@ -170,15 +170,15 @@ struct TrinkTextField: View {
                     } label: {
                         MhSymbol(revealed ? "MhEyeOff" : "MhEye")
                             .foregroundStyle(Mh.textSecondary)
-                            .frame(width: 36, height: 36)
+                            .frame(width: Mh.touch, height: Mh.touch)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(revealed ? "Verbergen" : "Anzeigen")
                 }
             }
-            .padding(.horizontal, Mh.abstand3)
-            .padding(.vertical, Mh.abstand2)
+            .padding(.leading, Mh.abstand3)
+            .padding(.trailing, secure ? 0 : Mh.abstand3)
             .frame(minHeight: Mh.touch)
             .background(RoundedRectangle(cornerRadius: Mh.radiusMd, style: .continuous).fill(Mh.fieldBg))
             .overlay(

@@ -8,6 +8,11 @@ on:
     branches: ["claude/**"]
   pull_request:
 
+# Ein neuer Push ersetzt den laufenden Lauf desselben Branches.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Build und Unit-Tests (iOS-Simulator)

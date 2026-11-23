@@ -8,6 +8,11 @@ on:
     branches: ["claude/**"]
   workflow_dispatch:
 
+# Ein neuer Push ersetzt den laufenden Lauf desselben Branches.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   fotos:
     name: Bildschirmfotos (iOS-Simulator)
