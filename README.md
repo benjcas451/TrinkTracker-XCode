@@ -29,7 +29,7 @@ Datenmodell, gleiche Backups.
 
 ## Version
 
-**1.3.0** (Build 1) — erste native Ausgabe. Gegenüber der Flutter-App 1.2.0
+**1.3.1** (Build 2) — Oberfläche auf „Minze & Honig 2.0“ umgestellt. Davor **1.3.0** (Build 1) — erste native Ausgabe. Gegenüber der Flutter-App 1.2.0
 neu: Standardnutzer je Gerät, Favoriten per Kontextmenü löschen, p12-Import
 für mTLS, Übernahme von Flutter-Daten und -Einstellungen. Major/Minor gilt
 über alle Plattformen (Spec 8), Patch darf divergieren. Die Version steht als
