@@ -1,144 +1,132 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Screen 3 „Einstellungen" (Spec 5). Die Verbindung steht oben; jede Familie
-/// trägt Host und Key selbst ein — nichts ist vorausgefüllt.
+/// Unterseite „Einstellungen“ (Spec 5): Verbindung, Backup im lokalen Modus,
+/// Info. Jede Familie trägt Host und Key selbst ein — nichts ist
+/// vorausgefüllt. Erreichbar über das Symbol im Kopf, auch ohne Verbindung.
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
-    @Environment(AppStore.self) private var store
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Einstellungen")
-                    .trinkText(.headlineMedium)
-                    .foregroundStyle(c.textStrong)
-                    .padding(.bottom, TrinkSpacing.lg)
-                ConnectionSection()
-                UserSection().padding(.top, TrinkSpacing.xl)
-                if settings.mode == .demo {
-                    BackupSection().padding(.top, TrinkSpacing.xl)
-                }
-                InfoSection().padding(.top, TrinkSpacing.xl)
+        Unterseitenrahmen("Einstellungen") {
+            ConnectionSection()
+            if settings.mode == .demo {
+                BackupSection().padding(.top, Mh.abstand8)
             }
-            .padding(TrinkSpacing.lg)
-            .padding(.bottom, TrinkSpacing.xxl)
+            InfoSection().padding(.top, Mh.abstand8)
         }
-        .background(c.background)
-        .scrollDismissesKeyboard(.interactively)
-        // Änderungen an Modus, URLs oder Keys bauen den Dienst neu — ohne Neustart.
-        .onChange(of: settings.revision) { _, _ in store.settingsChanged() }
     }
 }
 
 // MARK: - Verbindung
 
-private struct RadioRow: View {
-    @Environment(\.colorScheme) private var scheme
-    let label: String
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        Button(action: action) {
-            HStack(spacing: TrinkSpacing.md) {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(selected ? c.green600 : c.textSecondary)
-                Text(label).trinkText(.bodyLarge).foregroundStyle(c.text)
-                Spacer()
-            }
-            .frame(minHeight: TrinkSpacing.minTouch)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
 private struct ConnectionSection: View {
     @Environment(AppSettings.self) private var settings
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
         let mode = settings.mode
         VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("Verbindung")
-            TrinkCard {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(ConnectionKind.allCases) { kind in
-                        RadioRow(label: kind.label, selected: mode.kind == kind) {
-                            if kind != mode.kind {
-                                settings.setMode(kind == .local ? .demo : ConnectionMode.defaultAuthMode)
-                            }
-                        }
-                    }
-
-                    if mode.isServer {
-                        Divider().padding(.vertical, TrinkSpacing.md)
-                        Text("Authentifizierung")
-                            .trinkText(.labelMedium)
-                            .foregroundStyle(c.textSecondary)
-                        ForEach(ConnectionMode.authModes) { option in
-                            RadioRow(label: option.authLabel, selected: mode == option) { settings.setMode(option) }
-                        }
-                        Divider().padding(.vertical, TrinkSpacing.md)
-
-                        BaseUrlField(mode: mode)
-
-                        SecretField(
-                            label: mode == .apiKey ? "API-Key" : "API-Key (optional)",
-                            helper: mode == .apiKey
-                                ? "Wird als X-API-Key gesendet."
-                                : "Leer lassen, wenn der Mandant keinen Key erwartet — dann wird kein X-API-Key-Header gesendet.",
-                            value: settings.apiKey(for: mode),
-                            onSave: { settings.setApiKey(mode, $0) }
-                        )
-                        .padding(.top, TrinkSpacing.md)
-
-                        if mode == .cloudflare {
-                            SecretField(
-                                label: "CF-Access-Client-Id",
-                                helper: "Service Token der Access-Anwendung dieses Hosts (endet üblich auf .access).",
-                                value: settings.cfAccessClientId,
-                                onSave: { settings.setCfAccessClientId($0) }
-                            )
-                            .padding(.top, TrinkSpacing.md)
-                            SecretField(
-                                label: "CF-Access-Client-Secret",
-                                value: settings.cfAccessClientSecret,
-                                onSave: { settings.setCfAccessClientSecret($0) }
-                            )
-                            .padding(.top, TrinkSpacing.md)
-                        }
-
-                        if mode == .api {
-                            CertSection().padding(.top, TrinkSpacing.md)
-                        }
-
-                        ConnectionTest().padding(.top, TrinkSpacing.lg)
-
-                        Divider().padding(.vertical, TrinkSpacing.md)
-                        Toggle(isOn: Binding(
-                            get: { settings.serverUserManagement },
-                            set: { settings.setServerUserManagement($0) }
-                        )) {
-                            VStack(alignment: .leading, spacing: TrinkSpacing.xs) {
-                                Text("Erweiterte Server-Actions").trinkText(.bodyLarge)
-                                Text("Nutzer- und Favoritenverwaltung über die API. Nur einschalten, wenn der Mandant nutzer_anlegen, nutzer_umbenennen, nutzer_loeschen und favorit_loeschen installiert hat.")
-                                    .trinkText(.bodySmall)
-                                    .foregroundStyle(c.textSecondary)
-                            }
-                        }
-                        .tint(c.green600)
+            Abschnittskopf("Verbindung")
+            ForEach(Array(ConnectionKind.allCases.enumerated()), id: \.element.id) { index, kind in
+                if index > 0 { MhTrennlinie() }
+                AuswahlZeile(kind.label, gewaehlt: mode.kind == kind) {
+                    if kind != mode.kind {
+                        settings.setMode(kind == .local ? .demo : ConnectionMode.defaultAuthMode)
                     }
                 }
             }
+
+            if mode.isServer {
+                Abschnittskopf("Authentifizierung").padding(.top, Mh.abstand6)
+                ForEach(Array(ConnectionMode.authModes.enumerated()), id: \.element.id) { index, option in
+                    if index > 0 { MhTrennlinie() }
+                    AuswahlZeile(option.authLabel, gewaehlt: mode == option) { settings.setMode(option) }
+                }
+
+                ServerFields(mode: mode).padding(.top, Mh.abstand6)
+
+                MhTrennlinie().padding(.top, Mh.abstand6)
+                Toggle(isOn: Binding(
+                    get: { settings.serverUserManagement },
+                    set: { settings.setServerUserManagement($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: Mh.abstand1) {
+                        Text("Erweiterte Server-Actions")
+                            .font(.custom(MhSchrift.medium, size: 16, relativeTo: .body))
+                            .foregroundStyle(Mh.textStrong)
+                        Text("Nutzer- und Favoritenverwaltung über die API. Nur einschalten, wenn der Mandant nutzer_anlegen, nutzer_umbenennen, nutzer_loeschen und favorit_loeschen installiert hat.")
+                            .mhText(.small)
+                            .foregroundStyle(Mh.textSecondary)
+                    }
+                }
+                .tint(Mh.primary)
+                .padding(.vertical, Mh.abstand3)
+            }
         }
+    }
+}
+
+/// Felder eines Server-Modus: Basis-URL, Keys, Zertifikat, Verbindungstest.
+private struct ServerFields: View {
+    @Environment(AppSettings.self) private var settings
+    let mode: ConnectionMode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            BaseUrlField(mode: mode)
+
+            SecretField(
+                label: mode == .apiKey ? "API-Key" : "API-Key (optional)",
+                helper: mode == .apiKey
+                    ? "Wird als X-API-Key gesendet."
+                    : "Leer lassen, wenn der Mandant keinen Key erwartet. Dann wird kein X-API-Key-Header gesendet.",
+                value: settings.apiKey(for: mode),
+                onSave: { settings.setApiKey(mode, $0) }
+            )
+            .padding(.top, Mh.abstand5)
+
+            if mode == .cloudflare {
+                SecretField(
+                    label: "CF-Access-Client-Id",
+                    helper: "Service Token der Access-Anwendung dieses Hosts (endet üblich auf .access).",
+                    value: settings.cfAccessClientId,
+                    onSave: { settings.setCfAccessClientId($0) }
+                )
+                .padding(.top, Mh.abstand5)
+                SecretField(
+                    label: "CF-Access-Client-Secret",
+                    value: settings.cfAccessClientSecret,
+                    onSave: { settings.setCfAccessClientSecret($0) }
+                )
+                .padding(.top, Mh.abstand5)
+            }
+
+            if mode == .api {
+                CertSection().padding(.top, Mh.abstand5)
+            }
+
+            ConnectionTest().padding(.top, Mh.abstand6)
+        }
+    }
+}
+
+/// Kleiner Speichern-Knopf neben einem Feld (Haarlinie, Haken-Symbol).
+private struct SpeichernKnopf: View {
+    let aktion: () -> Void
+
+    var body: some View {
+        Button(action: aktion) {
+            MhSymbol("MhCheck")
+                .frame(width: Mh.touch, height: Mh.touch)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Mh.textStrong)
+        .overlay(
+            RoundedRectangle(cornerRadius: Mh.radiusMd, style: .continuous)
+                .stroke(Mh.borderStrong, lineWidth: 1)
+        )
+        .accessibilityLabel("Speichern")
     }
 }
 
@@ -147,30 +135,21 @@ private struct ConnectionSection: View {
 private struct BaseUrlField: View {
     @Environment(AppSettings.self) private var settings
     @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
     let mode: ConnectionMode
 
     @State private var text = ""
     @State private var error: String?
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        VStack(alignment: .leading, spacing: TrinkSpacing.xs) {
-            HStack(alignment: .bottom, spacing: TrinkSpacing.sm) {
-                // Ohne Modus im Text: Die gewählte Authentifizierung steht in
-                // derselben Karte direkt darüber.
+        VStack(alignment: .leading, spacing: Mh.abstand2) {
+            HStack(alignment: .bottom, spacing: Mh.abstand2) {
+                // Ohne Modus im Text: Die gewählte Authentifizierung steht
+                // direkt darüber.
                 TrinkTextField(label: "Basis-URL", text: $text, placeholder: baseUrlPlaceholder, keyboard: .URL, error: error, onSubmit: save)
-                Button(action: save) {
-                    Image(systemName: "checkmark")
-                        .frame(width: TrinkSpacing.minTouch, height: TrinkSpacing.minTouch)
-                }
-                .buttonStyle(.trinkOutlined)
-                .accessibilityLabel("Speichern")
-                .padding(.bottom, error == nil ? 0 : 22)
+                SpeichernKnopf(aktion: save)
+                    .padding(.bottom, error == nil ? 0 : 22)
             }
-            Text("Eigenes Feld je Modus — ein Wechsel überschreibt nichts. Die Änderung wirkt sofort, die Warteschlange wechselt mit.")
-                .trinkText(.bodySmall)
-                .foregroundStyle(c.textSecondary)
+            Hinweistext("Eigenes Feld je Modus, ein Wechsel überschreibt nichts. Die Änderung wirkt sofort, die Warteschlange wechselt mit.")
         }
         .onAppear { text = settings.baseUrl(for: mode) }
         .onChange(of: mode) { _, newMode in
@@ -191,7 +170,6 @@ private struct BaseUrlField: View {
 
 private struct SecretField: View {
     @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
     let label: String
     var helper: String?
     let value: String
@@ -200,19 +178,13 @@ private struct SecretField: View {
     @State private var text = ""
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        VStack(alignment: .leading, spacing: TrinkSpacing.xs) {
-            HStack(alignment: .bottom, spacing: TrinkSpacing.sm) {
+        VStack(alignment: .leading, spacing: Mh.abstand2) {
+            HStack(alignment: .bottom, spacing: Mh.abstand2) {
                 TrinkTextField(label: label, text: $text, secure: true, onSubmit: save)
-                Button(action: save) {
-                    Image(systemName: "checkmark")
-                        .frame(width: TrinkSpacing.minTouch, height: TrinkSpacing.minTouch)
-                }
-                .buttonStyle(.trinkOutlined)
-                .accessibilityLabel("Speichern")
+                SpeichernKnopf(aktion: save)
             }
             if let helper {
-                Text(helper).trinkText(.bodySmall).foregroundStyle(c.textSecondary)
+                Hinweistext(helper)
             }
         }
         .onAppear { text = value }
@@ -232,7 +204,6 @@ private struct SecretField: View {
 private struct CertSection: View {
     @Environment(AppSettings.self) private var settings
     @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
 
     @State private var status = "Zertifikatsstatus wird geprüft …"
     @State private var importing: ClientCertificateStore.FileKind?
@@ -240,19 +211,15 @@ private struct CertSection: View {
     @State private var passwordPrompt: TextPrompt?
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        VStack(alignment: .leading, spacing: TrinkSpacing.xs) {
-            Text("Client-Zertifikat (mTLS)").trinkText(.labelLarge)
-            Text(status).trinkText(.bodySmall).foregroundStyle(c.textSecondary)
+        VStack(alignment: .leading, spacing: Mh.abstand2) {
+            FeldLabel("Client-Zertifikat (mTLS)")
+            Hinweistext(status)
             FlowLayout {
-                Button("client.p12 wählen") { importing = .p12 }.buttonStyle(.trinkOutlined)
-                Button("client.crt wählen") { importing = .cert }.buttonStyle(.trinkOutlined)
-                Button("client.key wählen") { importing = .key }.buttonStyle(.trinkOutlined)
+                Button("client.p12 wählen") { importing = .p12 }.buttonStyle(MhZweitButtonStil(klein: true))
+                Button("client.crt wählen") { importing = .cert }.buttonStyle(MhZweitButtonStil(klein: true))
+                Button("client.key wählen") { importing = .key }.buttonStyle(MhZweitButtonStil(klein: true))
             }
-            .padding(.top, TrinkSpacing.sm)
-            Text("Empfohlen ist eine PKCS#12-Datei (client.p12). Alternativ PEM-Dateien; der Schlüssel muss dann ohne Passwort vorliegen. Die Dateien werden in den App-Ordner kopiert und liegen nicht im Backup der Einstellungen.")
-                .trinkText(.bodySmall)
-                .foregroundStyle(c.textSecondary)
+            Hinweistext("Empfohlen ist eine PKCS#12-Datei (client.p12). Alternativ PEM-Dateien; der Schlüssel muss dann ohne Passwort vorliegen. Die Dateien werden in den App-Ordner kopiert und liegen nicht im Backup der Einstellungen.")
         }
         .onAppear(perform: check)
         .fileImporter(
@@ -277,7 +244,7 @@ private struct CertSection: View {
             var missing: [String] = []
             if !s.cert { missing.append("client.crt") }
             if !s.key { missing.append("client.key") }
-            status = "Fehlt: \(missing.joined(separator: " und ")) — oder client.p12 (gesucht in \(s.path))"
+            status = "Fehlt: \(missing.joined(separator: " und ")), oder client.p12 (gesucht in \(s.path))"
         }
     }
 
@@ -319,30 +286,23 @@ func readSecurityScoped(_ url: URL) -> Data? {
     return try? Data(contentsOf: url)
 }
 
-/// „Verbindung testen" ruft `?action=users` und meldet die Anzahl Nutzer —
-/// oder den Fehler samt CF-/Auth-Diagnose (Spec 3.2/3.3).
+/// „Verbindung testen“ ruft `?action=users` und meldet die Anzahl Nutzer —
+/// oder den Fehler samt CF-/Auth-Diagnose (Spec 3.2/3.3). Die eine
+/// Hauptaktion dieser Seite in den Server-Modi.
 private struct ConnectionTest: View {
     @Environment(AppSettings.self) private var settings
-    @Environment(\.colorScheme) private var scheme
 
     @State private var busy = false
     @State private var result: String?
     @State private var failed = false
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        VStack(alignment: .leading, spacing: TrinkSpacing.sm) {
+        VStack(alignment: .leading, spacing: Mh.abstand3) {
             Button(busy ? "Teste …" : "Verbindung testen") { Task { await test() } }
-                .buttonStyle(.trinkFilled)
+                .buttonStyle(MhHauptButtonStil(breit: true))
                 .disabled(busy)
             if let result {
-                Text(result)
-                    .trinkText(.bodySmall)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(TrinkSpacing.md)
-                    .background(failed ? c.errorBg : c.successBg)
-                    .clipShape(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: TrinkRadii.sm, style: .continuous).stroke(c.border, lineWidth: 1.5))
+                MhHinweis(result, art: failed ? .fehler : .erfolg)
                     .textSelection(.enabled)
             }
         }
@@ -355,7 +315,7 @@ private struct ConnectionTest: View {
         let service = createConfiguredEntryService(settings, offlineFaehig: false)
         do {
             let count = try await service.testConnection()
-            result = "Verbindung ok — \(count) Nutzer gefunden."
+            result = "Verbindung in Ordnung, \(count) Nutzer gefunden."
             failed = false
         } catch {
             result = errorText(error)
@@ -363,134 +323,6 @@ private struct ConnectionTest: View {
         }
         await service.dispose()
         busy = false
-    }
-}
-
-// MARK: - Nutzer & Favoriten
-
-private struct UserSection: View {
-    @Environment(AppStore.self) private var store
-    @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
-
-    @State private var textPrompt: TextPrompt?
-    @State private var confirmPrompt: ConfirmPrompt?
-
-    var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        let canManage = store.supportsUserManagement
-        VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("Nutzer & Tagesziele") {
-                if canManage {
-                    Button("Nutzer anlegen") { textPrompt = Dialogs.createUser(store: store, toasts: toasts) }
-                        .buttonStyle(.trinkText)
-                }
-            }
-            if !canManage {
-                Text("In diesem Modus bietet die API kein Anlegen, Umbenennen oder Löschen von Nutzern. Das übernimmt die Web-App — oder du schaltest oben die erweiterten Server-Actions ein.")
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.textSecondary)
-                    .padding(.bottom, TrinkSpacing.md)
-            }
-            if store.users.isEmpty {
-                Text("Noch keine Nutzer.").trinkText(.bodySmall).foregroundStyle(c.textSecondary)
-            } else {
-                ForEach(store.users) { user in
-                    let isDefault = store.isDefaultUser(user)
-                    TrinkCard(padding: .symmetric(horizontal: TrinkSpacing.lg, vertical: TrinkSpacing.sm)) {
-                        HStack(spacing: 0) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(user.name).trinkText(.bodyLarge)
-                                Text(verbatim: [
-                                    user.tageszielMl == 0 ? "kein Tagesziel" : "Tagesziel \(user.tageszielMl) ml",
-                                    isDefault ? "Standard auf diesem Gerät" : nil,
-                                ].compactMap { $0 }.joined(separator: " · "))
-                                    .trinkText(.bodySmall)
-                                    .foregroundStyle(c.textSecondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            iconButton(isDefault ? "star.fill" : "star",
-                                       label: isDefault ? "Standardnutzer entfernen" : "Als Standardnutzer festlegen",
-                                       color: isDefault ? (c.isDark ? c.yellow300 : c.yellow900) : c.text) {
-                                Task {
-                                    await store.setDefaultUser(isDefault ? nil : user)
-                                    toasts.show(isDefault
-                                                ? "Kein Standardnutzer mehr — die App merkt sich die letzte Auswahl."
-                                                : "\(user.name) ist jetzt Standard auf diesem Gerät.")
-                                }
-                            }
-                            iconButton("flag", label: "Tagesziel", color: c.text) {
-                                textPrompt = Dialogs.tagesziel(user, store: store, toasts: toasts)
-                            }
-                            if canManage {
-                                iconButton("pencil", label: "Umbenennen", color: c.text) {
-                                    textPrompt = Dialogs.renameUser(user, store: store, toasts: toasts)
-                                }
-                                iconButton("trash", label: "Löschen", color: c.danger) {
-                                    confirmPrompt = Dialogs.deleteUser(user, store: store, toasts: toasts)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.bottom, TrinkSpacing.sm)
-                }
-            }
-
-            if !store.users.isEmpty {
-                Text("★ Standardnutzer: Mit ihm startet die App auf diesem Gerät — praktisch, wenn jedes Familienmitglied sein eigenes Telefon hat. Zwischendurch für andere eintragen geht weiterhin per Tipp auf die Kachel.")
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.textSecondary)
-                    .padding(.top, TrinkSpacing.xs)
-            }
-
-            if let user = store.selectedUser {
-                SectionTitle("Favoriten von \(user.name)").padding(.top, TrinkSpacing.lg)
-                if !canManage {
-                    Text("Favoriten löschen bietet die API in diesem Modus nur mit den erweiterten Server-Actions (oben).")
-                        .trinkText(.bodySmall)
-                        .foregroundStyle(c.textSecondary)
-                        .padding(.bottom, TrinkSpacing.md)
-                }
-                if store.favorites.isEmpty {
-                    Text("Noch keine Favoriten — im Heute-Screen über „Hinzufügen“ oder „Als Favorit“ anlegen.")
-                        .trinkText(.bodySmall)
-                        .foregroundStyle(c.textSecondary)
-                } else {
-                    ForEach(store.favorites) { favorite in
-                        TrinkCard(padding: .symmetric(horizontal: TrinkSpacing.lg, vertical: TrinkSpacing.sm)) {
-                            HStack {
-                                Text(verbatim: "\(favorite.getraenk) · \(favorite.mengeMl) ml")
-                                    .trinkText(.bodyLarge)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                if canManage {
-                                    iconButton("trash", label: "Löschen", color: c.danger) {
-                                        confirmPrompt = Dialogs.deleteFavorite(favorite, store: store, toasts: toasts)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.bottom, TrinkSpacing.sm)
-                    }
-                    if canManage {
-                        Text("Andere Nutzer oben in der Familie auswählen, um deren Favoriten zu bearbeiten.")
-                            .trinkText(.bodySmall)
-                            .foregroundStyle(c.textSecondary)
-                    }
-                }
-            }
-        }
-        .textPrompt($textPrompt)
-        .confirmPrompt($confirmPrompt)
-    }
-
-    private func iconButton(_ symbol: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .foregroundStyle(color)
-                .frame(width: TrinkSpacing.minTouch, height: TrinkSpacing.minTouch)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 }
 
@@ -513,10 +345,11 @@ struct JSONBackupDocument: FileDocument {
     }
 }
 
+/// Backup und Export im lokalen Modus. „Exportieren“ ist hier die eine
+/// Hauptaktion (der Verbindungstest gibt es nur in den Server-Modi).
 private struct BackupSection: View {
     @Environment(AppStore.self) private var store
     @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
 
     @State private var busy = false
     @State private var exportDocument: JSONBackupDocument?
@@ -529,24 +362,14 @@ private struct BackupSection: View {
     }
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
         VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("Backup & Export (lokaler Modus)")
-            TrinkCard {
-                VStack(alignment: .leading, spacing: TrinkSpacing.md) {
-                    Text("Alle lokalen Daten als JSON sichern oder zurückspielen — auch für den Wechsel zwischen Geräten. Das Format ist zur Flutter-Version kompatibel.")
-                        .trinkText(.bodySmall)
-                        .foregroundStyle(c.textSecondary)
-                    FlowLayout {
-                        Button("Exportieren") { Task { await export() } }
-                            .buttonStyle(.trinkFilled)
-                            .disabled(busy)
-                        Button("Importieren") { showImporter = true }
-                            .buttonStyle(.trinkOutlined)
-                            .disabled(busy)
-                    }
-                }
+            Abschnittskopf("Backup und Export")
+            Hinweistext("Alle lokalen Daten als JSON sichern oder zurückspielen, auch für den Wechsel zwischen Geräten. Das Format ist zur Flutter-Version kompatibel.")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Mh.abstand3) { knoepfe }
+                VStack(spacing: Mh.abstand3) { knoepfe }
             }
+            .padding(.top, Mh.abstand4)
         }
         .fileExporter(
             isPresented: Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } }),
@@ -563,6 +386,16 @@ private struct BackupSection: View {
             handleImport(result)
         }
         .confirmPrompt($confirmPrompt)
+    }
+
+    @ViewBuilder
+    private var knoepfe: some View {
+        Button("Exportieren") { Task { await export() } }
+            .buttonStyle(MhHauptButtonStil(breit: true))
+            .disabled(busy)
+        Button("Importieren") { showImporter = true }
+            .buttonStyle(MhZweitButtonStil(breit: true))
+            .disabled(busy)
     }
 
     private func export() async {
@@ -620,45 +453,46 @@ private struct BackupSection: View {
 private struct InfoSection: View {
     @Environment(AppSettings.self) private var settings
     @Environment(AppStore.self) private var store
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
         VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("Info")
-            TrinkCard(color: c.subtle) {
-                VStack(alignment: .leading, spacing: TrinkSpacing.xs) {
-                    InfoRow(label: "Modus", value: settings.mode.label)
-                    InfoRow(
-                        label: "Warteschlange",
-                        value: settings.mode.isServer ? "\(store.pendingCount) ausstehend (\(settings.queueKey))" : "entfällt im lokalen Modus"
-                    )
-                    InfoRow(label: "Zeitzone", value: "Europe/Berlin (Tagesgrenzen wie Server)")
-                    InfoRow(label: "Version", value: Bundle.main.versionLabel)
-                    Text("Trink-Tracker speichert Host, Key und Zertifikate nur auf diesem Gerät. Keys liegen im Schlüsselbund des Systems.")
-                        .trinkText(.bodySmall)
-                        .foregroundStyle(c.textSecondary)
-                        .padding(.top, TrinkSpacing.sm)
-                }
-            }
+            Abschnittskopf("Info")
+            InfoRow(label: "Modus", value: settings.mode.label)
+            MhTrennlinie()
+            InfoRow(
+                label: "Warteschlange",
+                value: settings.mode.isServer ? "\(store.pendingCount) ausstehend (\(settings.queueKey))" : "entfällt im lokalen Modus"
+            )
+            MhTrennlinie()
+            InfoRow(label: "Zeitzone", value: "Europe/Berlin (Tagesgrenzen wie Server)")
+            MhTrennlinie()
+            InfoRow(label: "Version", value: Bundle.main.versionLabel)
+            Hinweistext("Trink-Tracker speichert Host, Key und Zertifikate nur auf diesem Gerät. Keys liegen im Schlüsselbund des Systems.")
+                .padding(.top, Mh.abstand4)
         }
     }
 }
 
 private struct InfoRow: View {
-    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
     let label: String
     let value: String
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        HStack(alignment: .top, spacing: TrinkSpacing.sm) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Mh.abstand3))
+        layout {
             Text(label)
-                .trinkText(.bodySmall)
-                .foregroundStyle(c.textSecondary)
-                .frame(width: 110, alignment: .leading)
-            Text(value).trinkText(.bodySmall).frame(maxWidth: .infinity, alignment: .leading)
+                .mhText(.small)
+                .foregroundStyle(Mh.textSecondary)
+                .frame(minWidth: typeSize.isAccessibilitySize ? nil : 110, alignment: .leading)
+            Text(value)
+                .mhText(.small)
+                .foregroundStyle(Mh.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.vertical, Mh.abstand3)
     }
 }
 

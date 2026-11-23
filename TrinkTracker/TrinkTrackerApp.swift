@@ -7,6 +7,9 @@ struct TrinkTrackerApp: App {
     @State private var toasts = ToastCenter()
 
     init() {
+        // Minze & Honig 2.0: Figtree registrieren, Navigationsleiste und
+        // Segmente an die Rollen anpassen.
+        MhDarstellung.einrichten()
         // Erster Start: lokaler Modus, leere Datenbank, keine vorkonfigurierten
         // Nutzer — die Familie legt alles selbst an (Spec 5 „Erster App-Start").
         let settings = AppSettings()

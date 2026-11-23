@@ -1,65 +1,82 @@
 import Charts
 import SwiftUI
 
-/// Screen 2 „Statistik" (Spec 5): 7-Tage-Balken, 30-Tage-Linie, Tagesziel-Linie.
+/// Ansicht „Statistik“ (Spec 5, Screen 2): Summen, 7-Tage-Balken,
+/// 30-Tage-Linie, Tagesziel-Linie. Kopf und Segmentschalter liegen in
+/// `RootView`.
 ///
 /// Die Summen für heute/Woche/Monat kommen aus `?action=stats`; die Tagesreihe
 /// rechnet die App aus den letzten Einträgen (`?action=entries&limit=500`),
 /// weil die API keine Tagesreihe liefert.
 struct StatsView: View {
     @Environment(AppStore.self) private var store
-    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if let user = store.selectedUser {
-                    content(for: user, c)
-                } else {
-                    EmptyHint(title: "Noch keine Auswertung", description: "Lege zuerst einen Nutzer an und trage etwas ein.")
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            if let user = store.selectedUser {
+                content(for: user)
+            } else {
+                MhLeer("Noch keine Auswertung. Lege zuerst einen Nutzer an und trage etwas ein.")
             }
-            .padding(TrinkSpacing.lg)
         }
-        .background(c.background)
-        .refreshable { await store.refresh() }
     }
 
     @ViewBuilder
-    private func content(for user: TrinkUser, _ c: TrinkPalette) -> some View {
+    private func content(for user: TrinkUser) -> some View {
         let perDay = Self.sumPerDay(store.historyEntries)
         let ziel = user.tageszielMl
-
-        Text("Statistik").trinkText(.headlineMedium).foregroundStyle(c.textStrong)
-        Text(user.name)
-            .trinkText(.bodyMedium)
-            .foregroundStyle(c.textSecondary)
-            .padding(.top, TrinkSpacing.xs)
-            .padding(.bottom, TrinkSpacing.lg)
+        let woche = DayValue.lastDays(7, perDay: perDay)
+        let monat = DayValue.lastDays(30, perDay: perDay)
+        // Bei sehr großer Schrift stehen die drei Summen untereinander.
+        let summen = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Mh.abstand4))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Mh.abstand3))
 
         OfflineBanner(isOffline: store.isOffline, pendingCount: store.pendingCount) {
             Task { await store.flushQueue() }
         }
 
-        HStack(spacing: TrinkSpacing.md) {
-            SummaryCard(label: "Heute", stats: store.stats.today)
-            SummaryCard(label: "Woche", stats: store.stats.week)
-            SummaryCard(label: "Monat", stats: store.stats.month)
+        if store.users.count > 1 {
+            Abschnittskopf("Nutzer")
+            FlowLayout {
+                ForEach(store.users) { other in
+                    MhAuswahl(other.name, gewaehlt: other.id == user.id) {
+                        Task { await store.selectUser(other.id) }
+                    }
+                }
+            }
+            .padding(.bottom, Mh.abstand2)
         }
+        Hinweistext(ziel == 0 ? "\(user.name) · kein Tagesziel festgelegt" : "\(user.name) · Tagesziel \(ziel) ml")
+            .padding(.bottom, Mh.abstand5)
 
-        SectionTitle("Letzte 7 Tage").padding(.top, TrinkSpacing.xl)
-        TrinkCard { WeekBars(days: DayValue.lastDays(7, perDay: perDay), tageszielMl: ziel) }
+        summen {
+            Summe(label: "Heute", stats: store.stats.today)
+            Summe(label: "Woche", stats: store.stats.week)
+            Summe(label: "Monat", stats: store.stats.month)
+        }
+        .padding(.bottom, Mh.abstand6)
+        MhTrennlinie()
 
-        SectionTitle("Letzte 30 Tage").padding(.top, TrinkSpacing.xl)
-        TrinkCard { MonthLine(days: DayValue.lastDays(30, perDay: perDay), tageszielMl: ziel) }
+        VStack(alignment: .leading, spacing: 0) {
+            DiagrammKopf(titel: "Letzte 7 Tage", tage: woche)
+            WeekBars(days: woche, tageszielMl: ziel).padding(.top, Mh.abstand4)
+            Legende(tageszielMl: ziel, mitBalken: true).padding(.top, Mh.abstand3)
+        }
+        .padding(.top, Mh.abstand6)
 
-        Text(verbatim: ziel == 0
-             ? "Kein Tagesziel gesetzt — die Ziel-Linie erscheint, sobald eines hinterlegt ist."
-             : "Ziel-Linie: \(ziel) ml")
-            .trinkText(.bodySmall)
-            .foregroundStyle(c.textSecondary)
-            .padding(.top, TrinkSpacing.lg)
+        VStack(alignment: .leading, spacing: 0) {
+            DiagrammKopf(titel: "Letzte 30 Tage", tage: monat)
+            MonthLine(days: monat, tageszielMl: ziel).padding(.top, Mh.abstand4)
+            Legende(tageszielMl: ziel, mitBalken: false).padding(.top, Mh.abstand3)
+        }
+        .padding(.top, Mh.abstand8)
+
+        Hinweistext(ziel == 0
+            ? "Kein Tagesziel gesetzt. Die Ziel-Linie erscheint, sobald eines hinterlegt ist. Das Tagesziel änderst du unter Nutzer."
+            : "Tage ohne Einträge zählen mit 0 ml. Das Tagesziel änderst du unter Nutzer.")
+            .padding(.top, Mh.abstand8)
     }
 
     /// Tagessummen nach Berliner Kalendertag.
@@ -90,58 +107,132 @@ struct DayValue: Identifiable {
     }
 }
 
-private struct SummaryCard: View {
-    @Environment(\.colorScheme) private var scheme
+/// Summe eines Zeitraums (`.stat-value` + `.stat-label`): Zahl dünn in
+/// Textfarbe, Einheit klein, Bezeichnung darunter.
+private struct Summe: View {
     let label: String
     let stats: PeriodStats
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        TrinkCard(padding: .all(TrinkSpacing.md)) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(label).trinkText(.bodySmall).foregroundStyle(c.textSecondary)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(verbatim: "\(stats.ml)")
-                    .trinkText(.titleLarge, tabular: true)
-                    .foregroundStyle(c.accentText)
-                    .padding(.top, TrinkSpacing.xs)
+                    .mhText(.number)
+                    .foregroundStyle(Mh.textStrong)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text(verbatim: "ml · \(stats.anzahl)×").trinkText(.bodySmall).foregroundStyle(c.textSecondary)
+                    .minimumScaleFactor(0.6)
+                Text("ml")
+                    .mhText(.small)
+                    .foregroundStyle(Mh.textSecondary)
             }
+            Text(verbatim: "\(label) · \(stats.anzahl)×")
+                .mhText(.small)
+                .monospacedDigit()
+                .foregroundStyle(Mh.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct DiagrammKopf: View {
+    let titel: String
+    let tage: [DayValue]
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Mh.abstand3) {
+            Text(titel)
+                .mhText(.h3)
+                .foregroundStyle(Mh.textStrong)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+            Text(verbatim: "\(BerlinTime.formatDayMonth(tage.first?.date ?? Date())) – \(BerlinTime.formatDayMonth(tage.last?.date ?? Date()))")
+                .mhText(.small)
+                .monospacedDigit()
+                .foregroundStyle(Mh.textSecondary)
         }
     }
 }
 
+/// Legende unter einem Diagramm: Punkte immer mit Text daneben.
+private struct Legende: View {
+    let tageszielMl: Int
+    let mitBalken: Bool
+
+    var body: some View {
+        if tageszielMl > 0 {
+            FlowLayout(spacing: Mh.abstand4) {
+                if mitBalken {
+                    eintrag(Mh.data1, "Tagesmenge")
+                    eintrag(Mh.data2, "Ziel erreicht")
+                }
+                HStack(spacing: 6) {
+                    ZielStrich().frame(width: 16, height: 2)
+                    Text(verbatim: "Tagesziel \(tageszielMl) ml")
+                }
+            }
+            .mhText(.small)
+            .foregroundStyle(Mh.textSecondary)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func eintrag(_ farbe: Color, _ text: String) -> some View {
+        HStack(spacing: 6) {
+            MhPunkt(farbe: farbe, groesse: 8)
+            Text(text)
+        }
+    }
+}
+
+/// Gestrichelte Ziel-Linie als kleines Legendenzeichen.
+private struct ZielStrich: View {
+    var body: some View {
+        GeometryReader { geo in
+            Path { pfad in
+                pfad.move(to: CGPoint(x: 0, y: geo.size.height / 2))
+                pfad.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
+            }
+            .stroke(Mh.textTertiary, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private let achsenSchrift = Font.custom(MhSchrift.regular, size: 12, relativeTo: .caption)
+
 private struct WeekBars: View {
-    @Environment(\.colorScheme) private var scheme
     let days: [DayValue]
     let tageszielMl: Int
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
         Chart {
             ForEach(days) { day in
-                BarMark(x: .value("Tag", day.weekday), y: .value("ml", day.ml), width: .ratio(0.7))
-                    .foregroundStyle(tageszielMl > 0 && day.ml >= tageszielMl ? c.yellow300 : c.green300)
-                    .cornerRadius(TrinkRadii.xs)
-                    .annotation(position: .top, spacing: TrinkSpacing.xs) {
+                BarMark(x: .value("Tag", day.weekday), y: .value("ml", day.ml), width: .ratio(0.6))
+                    .foregroundStyle(tageszielMl > 0 && day.ml >= tageszielMl ? Mh.data2 : Mh.data1)
+                    .cornerRadius(4)
+                    .annotation(position: .top, spacing: Mh.abstand1) {
+                        // Grund hinter der Zahl, damit sie über der Ziel-Linie lesbar bleibt.
                         Text(verbatim: "\(day.ml)")
-                            .trinkText(.bodySmall, tabular: true)
-                            .foregroundStyle(c.textSecondary)
+                            .font(achsenSchrift)
+                            .monospacedDigit()
+                            .foregroundStyle(Mh.text)
+                            .padding(.horizontal, 2)
+                            .background(Mh.bg)
                     }
             }
             if tageszielMl > 0 {
                 RuleMark(y: .value("Ziel", tageszielMl))
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                    .foregroundStyle(c.yellow300)
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 5]))
+                    .foregroundStyle(Mh.textTertiary)
             }
         }
         .chartXScale(domain: days.map(\.weekday))
         .chartXAxis {
             AxisMarks { _ in
                 AxisValueLabel()
-                    .font(TrinkTextStyle.bodySmall.font)
-                    .foregroundStyle(c.textSecondary)
+                    .font(achsenSchrift)
+                    .foregroundStyle(Mh.textSecondary)
             }
         }
         .chartYAxis(.hidden)
@@ -151,46 +242,46 @@ private struct WeekBars: View {
 }
 
 private struct MonthLine: View {
-    @Environment(\.colorScheme) private var scheme
     let days: [DayValue]
     let tageszielMl: Int
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
-        VStack(spacing: TrinkSpacing.sm) {
-            Chart {
-                ForEach(days) { day in
-                    AreaMark(x: .value("Tag", day.date, unit: .day), y: .value("ml", day.ml))
-                        .foregroundStyle(c.green300.opacity(0.35))
-                        .interpolationMethod(.linear)
-                    LineMark(x: .value("Tag", day.date, unit: .day), y: .value("ml", day.ml))
-                        .foregroundStyle(c.green600)
-                        .lineStyle(StrokeStyle(lineWidth: 2, lineJoin: .round))
-                        .interpolationMethod(.linear)
-                }
-                if tageszielMl > 0 {
-                    // Gestrichelt, damit sich die Ziel-Linie von der Tageslinie absetzt.
-                    RuleMark(y: .value("Ziel", tageszielMl))
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                        .foregroundStyle(c.yellow300)
-                }
+        Chart {
+            ForEach(days) { day in
+                AreaMark(x: .value("Tag", day.date, unit: .day), y: .value("ml", day.ml))
+                    .foregroundStyle(Mh.data1.opacity(0.22))
+                    .interpolationMethod(.linear)
+                LineMark(x: .value("Tag", day.date, unit: .day), y: .value("ml", day.ml))
+                    .foregroundStyle(Mh.data1)
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .interpolationMethod(.linear)
             }
-            .chartXAxis(.hidden)
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
-                    AxisGridLine().foregroundStyle(c.border)
-                    AxisValueLabel().foregroundStyle(c.textSecondary).font(TrinkTextStyle.caption.font)
-                }
+            if tageszielMl > 0 {
+                // Gestrichelt, damit sich die Ziel-Linie von der Tageslinie absetzt.
+                RuleMark(y: .value("Ziel", tageszielMl))
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 5]))
+                    .foregroundStyle(Mh.textTertiary)
             }
-            .chartYScale(domain: 0...Double(max(days.map(\.ml).max() ?? 0, tageszielMl, 1)) * 1.1)
-            .frame(height: 180)
-            HStack {
-                Text(BerlinTime.formatDayMonth(days.first?.date ?? Date()))
-                Spacer()
-                Text(BerlinTime.formatDayMonth(days.last?.date ?? Date()))
-            }
-            .trinkText(.bodySmall)
-            .foregroundStyle(c.textSecondary)
         }
+        .chartXAxis(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                AxisGridLine().foregroundStyle(Mh.border)
+                // Eigener Text statt Standardformat: ohne Tausendertrennzeichen (AGENTS.md Regel 9).
+                AxisValueLabel {
+                    Text(verbatim: Self.achsenText(value))
+                        .font(achsenSchrift)
+                        .foregroundStyle(Mh.textSecondary)
+                }
+            }
+        }
+        .chartYScale(domain: 0...Double(max(days.map(\.ml).max() ?? 0, tageszielMl, 1)) * 1.1)
+        .frame(height: 180)
+    }
+
+    private static func achsenText(_ value: AxisValue) -> String {
+        if let zahl = value.as(Int.self) { return String(zahl) }
+        if let zahl = value.as(Double.self) { return String(Int(zahl.rounded())) }
+        return ""
     }
 }

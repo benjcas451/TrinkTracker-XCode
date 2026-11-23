@@ -17,11 +17,19 @@
 			remoteGlobalIDString = A000000000000000000000010;
 			remoteInfo = TrinkTracker;
 		};
+		A00000000000000000000004A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A000000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A000000000000000000000010;
+			remoteInfo = TrinkTracker;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A000000000000000000000011 /* TrinkTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TrinkTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A000000000000000000000021 /* TrinkTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrinkTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A000000000000000000000041 /* TrinkTrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrinkTrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A000000000000000000000030 /* TrinkTracker-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "TrinkTracker-Info.plist"; sourceTree = "<group>"; };
 		A000000000000000000000032 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		A000000000000000000000033 /* GOTO.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = GOTO.md; sourceTree = "<group>"; };
@@ -38,6 +46,11 @@
 		A000000000000000000000022 /* TrinkTrackerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = TrinkTrackerTests;
+			sourceTree = "<group>";
+		};
+		A000000000000000000000042 /* TrinkTrackerUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TrinkTrackerUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -57,6 +70,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A000000000000000000000044 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -70,6 +90,7 @@
 				A000000000000000000000012 /* TrinkTracker */,
 				A000000000000000000000022 /* TrinkTrackerTests */,
 				A000000000000000000000031 /* Config */,
+				A000000000000000000000042 /* TrinkTrackerUITests */,
 				A000000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -79,6 +100,7 @@
 			children = (
 				A000000000000000000000011 /* TrinkTracker.app */,
 				A000000000000000000000021 /* TrinkTrackerTests.xctest */,
+				A000000000000000000000041 /* TrinkTrackerUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -138,6 +160,29 @@
 			productReference = A000000000000000000000021 /* TrinkTrackerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		A000000000000000000000040 /* TrinkTrackerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A000000000000000000000046 /* Build configuration list for PBXNativeTarget "TrinkTrackerUITests" */;
+			buildPhases = (
+				A000000000000000000000043 /* Sources */,
+				A000000000000000000000044 /* Frameworks */,
+				A000000000000000000000045 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A000000000000000000000049 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A000000000000000000000042 /* TrinkTrackerUITests */,
+			);
+			name = TrinkTrackerUITests;
+			packageProductDependencies = (
+			);
+			productName = TrinkTrackerUITests;
+			productReference = A000000000000000000000041 /* TrinkTrackerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -152,6 +197,10 @@
 						CreatedOnToolsVersion = 27.0;
 					};
 					A000000000000000000000020 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = A000000000000000000000010;
+					};
+					A000000000000000000000040 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = A000000000000000000000010;
 					};
@@ -173,12 +222,20 @@
 			targets = (
 				A000000000000000000000010 /* TrinkTracker */,
 				A000000000000000000000020 /* TrinkTrackerTests */,
+				A000000000000000000000040 /* TrinkTrackerUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A000000000000000000000015 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A000000000000000000000045 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -202,6 +259,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A000000000000000000000043 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -209,6 +273,11 @@
 			isa = PBXTargetDependency;
 			target = A000000000000000000000010 /* TrinkTracker */;
 			targetProxy = A00000000000000000000002A /* PBXContainerItemProxy */;
+		};
+		A000000000000000000000049 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A000000000000000000000010 /* TrinkTracker */;
+			targetProxy = A00000000000000000000004A /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -424,6 +493,40 @@
 			};
 			name = Release;
 		};
+		A000000000000000000000047 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2HNRMGYGMU;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.dwarftsch.trinktracker.TrinkTrackerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TrinkTracker;
+			};
+			name = Debug;
+		};
+		A000000000000000000000048 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2HNRMGYGMU;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.dwarftsch.trinktracker.TrinkTrackerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TrinkTracker;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -450,6 +553,15 @@
 			buildConfigurations = (
 				A000000000000000000000027 /* Debug */,
 				A000000000000000000000028 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A000000000000000000000046 /* Build configuration list for PBXNativeTarget "TrinkTrackerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A000000000000000000000047 /* Debug */,
+				A000000000000000000000048 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

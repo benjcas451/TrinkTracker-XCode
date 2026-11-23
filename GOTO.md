@@ -75,7 +75,8 @@ Nur Testdaten verwenden; keine produktiven Werte in Screenshots oder Logs.
       Komplikationen (Spec 6).
 - [ ] Apple-Health-Synchronisierung nur für Wasser, opt-in — oder bewusst
       zurückstellen.
-- [ ] CI/Signing: Xcode Cloud oder GitHub Actions, TestFlight-Verteilung.
+- [x] CI: GitHub Actions (`ci.yml` Build + Unit-Tests, `screenshots.yml` Bildschirmfotos).
+- [ ] Signing: TestFlight-Verteilung.
 - [ ] Cloudflare-Service-Token bzw. Bypass-Regel je Familien-Host außerhalb des
       Repositories konfigurieren.
 

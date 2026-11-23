@@ -136,7 +136,6 @@ enum Dialogs {
 struct CreateFavoriteSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(ToastCenter.self) private var toasts
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 
     @State private var drink = ""
@@ -144,22 +143,25 @@ struct CreateFavoriteSheet: View {
     @FocusState private var drinkFocused: Bool
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: TrinkSpacing.md) {
-                    TrinkTextField(label: "Getränk", text: $drink, maxLength: 60)
+                VStack(alignment: .leading, spacing: Mh.abstand4) {
+                    TrinkTextField(label: "Getränk", text: $drink, placeholder: "z. B. Wasser, Apfelschorle", maxLength: 60)
                         .focused($drinkFocused)
                     TrinkTextField(label: "Menge", text: $amount, suffix: "ml", keyboard: .numberPad)
-                    FlowLayout {
-                        ForEach(vorwahlMengen, id: \.self) { menge in
-                            TrinkChip(label: String(menge), selected: Int(amount) == menge) { amount = String(menge) }
+                    VStack(alignment: .leading, spacing: Mh.abstand2) {
+                        FeldLabel("Klassische Größen")
+                        FlowLayout {
+                            ForEach(vorwahlMengen, id: \.self) { menge in
+                                MhAuswahl("\(String(menge)) ml", gewaehlt: Int(amount) == menge) { amount = String(menge) }
+                            }
                         }
                     }
+                    .padding(.top, Mh.abstand1)
                 }
-                .padding(TrinkSpacing.lg)
+                .padding(Mh.rand)
             }
-            .background(c.background)
+            .background(Mh.bg.ignoresSafeArea())
             .navigationTitle("Favorit anlegen")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -189,7 +191,6 @@ struct CreateFavoriteSheet: View {
 // MARK: - Uhrzeit für einen Eintrag
 
 struct TimePickerSheet: View {
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
     @State private var selection: Date
     let onPick: (Date) -> Void
@@ -200,20 +201,18 @@ struct TimePickerSheet: View {
     }
 
     var body: some View {
-        let c = TrinkPalette.resolve(scheme)
         NavigationStack {
             VStack {
                 DatePicker("Uhrzeit des Eintrags", selection: $selection, displayedComponents: .hourAndMinute)
                     .datePickerStyle(.wheel)
                     .labelsHidden()
                     .environment(\.timeZone, TimeZone(identifier: "Europe/Berlin") ?? .current)
-                Text("Zeiten in Europe/Berlin. Liegt die Uhrzeit in der Zukunft, wird der Eintrag auf gestern gebucht.")
-                    .trinkText(.bodySmall)
-                    .foregroundStyle(c.textSecondary)
-                    .padding(.horizontal, TrinkSpacing.lg)
+                Hinweistext("Zeiten in Europe/Berlin. Liegt die Uhrzeit in der Zukunft, wird der Eintrag auf gestern gebucht.")
+                    .padding(.horizontal, Mh.rand)
                 Spacer()
             }
-            .background(c.background)
+            .frame(maxWidth: .infinity)
+            .background(Mh.bg.ignoresSafeArea())
             .navigationTitle("Uhrzeit des Eintrags")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
