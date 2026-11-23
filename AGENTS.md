@@ -41,8 +41,12 @@ xcodebuild -scheme TrinkTracker -destination 'platform=iOS Simulator,name=iPhone
 
 ### Simulator-Hilfen (nur Debug)
 
-* `-initialTab heute|statistik|einstellungen` als Startargument öffnet einen Tab
-  direkt (`xcrun simctl launch <UDID> org.dwarftsch.trinktracker -initialTab statistik`).
+* `-initialTab heute|statistik|nutzer|einstellungen` als Startargument öffnet eine
+  Ansicht direkt (`xcrun simctl launch <UDID> org.dwarftsch.trinktracker -initialTab statistik`).
+* `-MhBildschirmfotos 1` stellt auf den lokalen Modus und spielt erfundene
+  Testdaten ein (Anna, Ben, Lina; `Debug/Bildschirmfotodaten.swift`). Ersetzt den
+  lokalen Bestand im Simulator. Nur Debug-Builds, genutzt vom UI-Test
+  `TrinkTrackerUITests/ScreenshotTests`.
 * Startargumente kommen als **Strings** in die UserDefaults. Ints wie
   `selectedUserId`/`defaultUserId` deshalb so setzen:
   `xcrun simctl spawn <UDID> defaults write org.dwarftsch.trinktracker trinktracker_settings.defaultUserId -int 1`
@@ -88,16 +92,21 @@ TrinkTracker/
     TrinkError.swift           TrinkErrorKind + neverSent + isPermanent
     TrinkValidation.swift      Grenzen wie der Server (Getränk ≤60, Menge 1–10000, Ziel 0–20000, Name ≤50)
   State/AppStore.swift         @Observable @MainActor; baut den Dienst aus den Settings, lädt alles, `run { }`
-  Theme/TrinkTheme.swift       Palette Minze & Honig, Radien, Spacing, Nunito (variable), Button-Stile
-  Views/                       RootView (TabView) · HomeView · StatsView · SettingsView · Dialogs · Components
-  Resources/                   Nunito-Variable.ttf (+ OFL)
-  Assets.xcassets/             AppIcon (light/dark/tinted 1024), AccentColor, LaunchBackground
+  Theme/MhTheme.swift          Minze & Honig 2.0: Rollen hell/dunkel (`Mh.*`), Radien, Abstände, Figtree, `.mhText(…)`
+  Theme/MhBausteine.swift      Bausteine des Designsystems (MhKopf, Buttons, MhSegmente, MhAuswahl, MhHinweis …)
+  Views/                       RootView (Kopf + Segmente Heute|Statistik, NavigationStack) · HomeView · StatsView
+                               · NutzerView · SettingsView · Dialogs · Components (app-eigene Bausteine)
+  Debug/Bildschirmfotodaten.swift  nur Debug: erfundene Testdaten für die Bildschirmfotos
+  Fonts/                       Figtree-Regular/-Medium/-SemiBold.ttf (Lizenz: licenses/Figtree-OFL.txt)
+  Assets.xcassets/             AppIcon (light/dark/tinted 1024), AccentColor, LaunchBackground, Mh*-Liniensymbole
 Config/TrinkTracker-Info.plist bewusst außerhalb des Sync-Ordners (UIAppFonts, UIFileSharingEnabled …)
 Design/                        Icon-Quelle: generate_app_icons.swift + SVG-Vorschauen (nicht im Build)
 TrinkTrackerTests/             Swift Testing; FakeService als Server-Attrappe
+TrinkTrackerUITests/           XCUITest `ScreenshotTests` (nur für den Workflow „Bildschirmfotos“)
+.github/workflows/             ci.yml (Build + Unit-Tests + Release-Build), screenshots.yml (Bildschirmfotos)
 ```
 
-**Sync-Gruppen:** `TrinkTracker/` und `TrinkTrackerTests/` sind
+**Sync-Gruppen:** `TrinkTracker/`, `TrinkTrackerTests/` und `TrinkTrackerUITests/` sind
 `PBXFileSystemSynchronizedRootGroup`. Neue Dateien einfach in den Ordner legen —
 `project.pbxproj` **nicht** von Hand um Dateireferenzen ergänzen.
 
@@ -144,22 +153,37 @@ liefert `nil` (Erfolg) oder die Fehlermeldung. Views geben das an
 
 ---
 
-## 5. Design „Minze & Honig“ (Spec 7)
+## 5. Design „Minze & Honig 2.0“
 
-Alles steht in `Theme/TrinkTheme.swift` — dort ändern, nie Hex-Werte in Views.
+Maßgeblich ist der Design Guide „Minze & Honig 2.0“ (Rollen, Typo, Komponenten);
+die Web-App ist die Referenz für Aufbau und Wirkung. Alles Gestalterische steht
+in `Theme/MhTheme.swift` (Rollen) und `Theme/MhBausteine.swift` (Bausteine) —
+Views benutzen nur Rollen (`Mh.primary`, `Mh.textSecondary` …), nie Hex- oder
+Skalenwerte.
 
-* Pastell (`green300 #A8D5BA`, `yellow300 #F7E8A4`, `purple300 #CDB4DB`) nur als
-  Fläche, nie als Textfarbe. Ausnahme Dark: 300er dürfen als Text auf `#1F2221` stehen.
-* Dark: keine hellen Karten, keine Schatten — Absetzung über 1.5 pt Border
-  (`c.borderWidth`). Light: 1 pt.
-* Radien 8/12/16/24/999 (`TrinkRadii`), Spacing 4er-Raster (`TrinkSpacing`),
-  Mindest-Touch 44 pt (`TrinkSpacing.minTouch`).
-* Fortschritt grün-300, ab 100 % honig-300. Löschen/Fehler: `c.danger`
-  (Dark aufgehellt). ml-Werte: `c.accentText`, mit `tabular: true`.
-* Nunito gebundelt als variable Schrift; `TrinkFont.uiFont` setzt die `wght`-Achse
-  (400 / 800). Textstufen über `.trinkText(.bodyMedium)` etc., Dynamic Type inklusive.
-* Karten: `TrinkCard`, Chips: `TrinkChip`, Felder: `TrinkTextField`,
-  Buttons: `.trinkFilled` / `.trinkOutlined` / `.trinkText`. Erst diese Bausteine
+* **Farbe ist Signal, keine Fläche:** keine Pastell-Buttons, -Kacheln oder
+  -Karten. Pastell nur als Punkt (`MhPunkt`), 4-pt-Balken (`MhBalken`),
+  gewählte Option (`MhAuswahl`) oder Hinweis (`MhHinweis`). Datenfarben
+  `Mh.data1/2/3` immer mit Zahl oder Text daneben.
+* **Genau eine Hauptaktion je Ansicht** (`.mhHaupt` / `MhHauptButtonStil`):
+  Heute „Eintrag anlegen“, Nutzer „Nutzer anlegen“, Einstellungen „Verbindung
+  testen“ (Server) bzw. „Exportieren“ (lokal). Alles andere `.mhZweit`
+  (Haarlinie), `.mhText` oder `.mhLoeschen` (Löschen, Rückgängig).
+* **Haarlinien und Weißraum** (`MhTrennlinie`, `Abschnittskopf`) statt Karten.
+* **Figtree** nur 400/500/600 über `.mhText(.h1)` usw. (Dynamic Type inklusive),
+  keine Kursive. Große Zahlen dünn (`.number`) in Textfarbe, Einheit klein.
+* **Liniensymbole** `Mh*.imageset` über `MhSymbol`/`MhSymbolButton` statt SF
+  Symbols und Emojis. Nicht benutzte Symbole entfernen (Bausatz-Skript).
+* **Dunkelmodus** über die Rollen (Grund `#1F2221`, Flächen `#262A28`, Linien
+  `#343A36`, farbiger Text nur aus den 200/300-Stufen). Folgt dem System.
+* Touch-Ziele mindestens 44 pt (`Mh.touch`).
+* Gerüst wie im Web: Kopf „Trink-Tracker“ mit Symbol-Knöpfen (Nutzer,
+  Einstellungen — immer erreichbar, auch ohne Verbindung), Segmentschalter
+  Heute | Statistik; Nutzer und Einstellungen sind Unterseiten
+  (`Unterseitenrahmen`, Zurück über die Navigationsleiste).
+* App-eigene Bausteine in `Views/Components.swift`: `Abschnittskopf`,
+  `FeldLabel`, `Hinweistext`, `AuswahlZeile`, `OfflineBanner`,
+  `TrinkTextField`, `FlowLayout`, Toast. Erst diese und die Mh-Bausteine
   nutzen, bevor neue entstehen.
 
 ---
@@ -206,6 +230,12 @@ nativen App ersetzt sie und übernimmt ihre Daten. Das darf nicht brechen:
     Major/Minor über Plattformen synchron (Spec 8), Patch darf divergieren.
 12. **Info.plist liegt in `Config/`**, nicht im Sync-Ordner, damit sie nicht als
     Ressource kopiert wird. `GENERATE_INFOPLIST_FILE = NO`.
+13. **Minze & Honig 2.0 (Nov. 2026):** Figtree statt Nunito, Rollen statt
+    Palette, Liniensymbole statt SF Symbols. Tab-Leiste ersetzt durch Kopf mit
+    Segmentschalter Heute | Statistik wie im Web; Nutzerverwaltung als eigene
+    Unterseite „Nutzer“ (vorher in den Einstellungen), Tagesziel/Umbenennen/
+    Löschen je Nutzer im Menü „…“. Funktionen, Datenformate und Texte der
+    Meldungen im Kern unverändert.
 
 ---
 
@@ -216,7 +246,9 @@ nativen App ersetzt sie und übernimmt ihre Daten. Das darf nicht brechen:
   **Testmandanten** verifizieren.
 * watchOS-Target mit `WatchConnectivity`, eigener Outbox (nicht `OfflineService`
   wiederverwenden) und Komplikationen (Spec 6).
-* Apple Health (opt-in, nur Wasser), CI/Signing (Xcode Cloud/TestFlight).
+* Apple Health (opt-in, nur Wasser), Signing/TestFlight. CI läuft über GitHub
+  Actions (`ci.yml`: Build, Unit-Tests, Release-Build; `screenshots.yml`:
+  Bildschirmfotos hell/dunkel, normale und große Schrift).
 * App-Icon: aqua-blau vs. App-Grün — bewusste Entscheidung steht aus.
   Neu erzeugen mit `swift Design/generate_app_icons.swift` (Farben in `palettes`).
 * Optional: Swift-6-Sprachmodus einschalten.

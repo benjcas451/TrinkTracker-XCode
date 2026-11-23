@@ -16,15 +16,16 @@ Datenmodell, gleiche Backups.
 | Vier Verbindungsmodi (Lokal/SQLite · API-Key · mTLS · Cloudflare Access) | ✅ |
 | Getrennte Base-URL-/Key-Slots je Modus, „Verbindung testen" | ✅ |
 | Offline-Wrapper: Lesecache + Warteschlange ohne Doppel-Anlage | ✅ |
-| Heute-Screen: Familienkacheln, Favoriten, Vorwahl-Chips, Rückgängig | ✅ |
+| Heute: Tagesmengen der Familie, Schnellwahl, klassische Größen, Rückgängig | ✅ |
 | Standardnutzer je Gerät (★), Favoriten per Kontextmenü löschen | ✅ — nur in der nativen App |
 | Statistik: 7-Tage-Balken, 30-Tage-Linie, Ziel-Linie (Swift Charts) | ✅ |
 | Einstellungen: Nutzer, Tagesziele, Favoriten, Backup/Export, Zertifikate | ✅ |
-| Design „Minze & Honig" inkl. Dark Mode, Nunito gebundelt, Dynamic Type | ✅ |
+| Design „Minze & Honig 2.0“ inkl. Dark Mode, Figtree gebundelt, Dynamic Type | ✅ |
 | Übernahme von Einstellungen und lokaler DB aus der Flutter-Version | ✅ |
 | mTLS: `client.p12` **oder** `client.crt` + `client.key` (PEM) | ✅ — auf echtem Mandanten ungetestet |
 | Watch (watchOS), Komplikationen, Apple Health | ⛔ offen — siehe unten |
-| CI/Signing (Xcode Cloud) | ⛔ offen |
+| CI (GitHub Actions: Build, Unit-Tests, Bildschirmfotos) | ✅ |
+| Signing/TestFlight | ⛔ offen |
 
 ## Version
 
@@ -63,17 +64,21 @@ TrinkTracker/
     ServiceFactory.swift       createConfiguredEntryService(...)
     TrinkError.swift, TrinkValidation.swift
   State/AppStore.swift         Bindeglied zur UI (@Observable, @MainActor)
-  Theme/TrinkTheme.swift       Minze & Honig, Button-Stile, Nunito (variable)
-  Views/                       Root · Heute · Statistik · Einstellungen · Dialoge
-  Resources/                   Nunito-Variable.ttf + OFL
-  Assets.xcassets/             App-Icon (light/dark/tinted), Akzent, Launch
+  Theme/MhTheme.swift          Minze & Honig 2.0: Rollen, Figtree, Abstände
+  Theme/MhBausteine.swift      Bausteine des Designsystems
+  Views/                       Root · Heute · Statistik · Nutzer · Einstellungen · Dialoge
+  Debug/                       Testdaten für Bildschirmfotos (nur Debug)
+  Fonts/                       Figtree (Lizenz in licenses/)
+  Assets.xcassets/             App-Icon (light/dark/tinted), Akzent, Launch, Liniensymbole
 Config/TrinkTracker-Info.plist
 Design/                        App-Icon-Generator + SVG-Vorschauen (nicht Teil des Builds)
 TrinkTrackerTests/             Swift Testing: Berlin-Zeit, Modelle, Validierung,
                                Einstellungen, Offline-Queue, SQLite, PEM/DER
+TrinkTrackerUITests/           ScreenshotTests (Bildschirmfotos im Workflow)
+.github/workflows/             ci.yml, screenshots.yml
 ```
 
-Die Ordner `TrinkTracker/` und `TrinkTrackerTests/` sind **File System
+Die Ordner `TrinkTracker/`, `TrinkTrackerTests/` und `TrinkTrackerUITests/` sind **File System
 Synchronized Groups**: Neue Swift-Dateien im Ordner sind automatisch im Target,
 `project.pbxproj` muss dafür nicht angefasst werden.
 
@@ -153,7 +158,7 @@ Signing: Team `2HNRMGYGMU`, Bundle-ID `org.dwarftsch.trinktracker`, automatisch.
   eigener Outbox und Komplikationen (Spec 6). Der `OfflineService` wird dort
   bewusst nicht wiederverwendet.
 * **Apple Health** (opt-in, nur Wasser).
-* **CI/Signing:** Xcode Cloud oder GitHub Actions, TestFlight.
+* **Signing:** TestFlight-Verteilung (CI für Build und Tests läuft bereits).
 * **Widgets / Live Activities** für die Schnellwahl (nicht in der Spec, liegt
   aber nahe).
 
