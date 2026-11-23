@@ -95,38 +95,39 @@ struct NutzerView: View {
         .frame(minHeight: 52)
     }
 
-    @ViewBuilder
     private func favoriten(of user: TrinkUser, canManage: Bool) -> some View {
-        Abschnittskopf("Favoriten von \(user.name)")
-        if !canManage {
-            Hinweistext("Favoriten löschen bietet die API in diesem Modus nur mit den erweiterten Server-Actions (Einstellungen).")
-                .padding(.bottom, Mh.abstand3)
-        }
-        if store.favorites.isEmpty {
-            MhLeer("Noch keine Favoriten. In der Ansicht Heute über „Hinzufügen“ oder „Als Favorit speichern“ anlegen.")
-        } else {
-            ForEach(Array(store.favorites.enumerated()), id: \.element.id) { index, favorite in
-                if index > 0 { MhTrennlinie() }
-                HStack(spacing: Mh.abstand3) {
-                    Text(favorite.getraenk)
-                        .mhText(.body)
-                        .foregroundStyle(Mh.textStrong)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(verbatim: "\(favorite.mengeMl) ml")
-                        .mhText(.body)
-                        .monospacedDigit()
-                        .foregroundStyle(Mh.text)
-                    if canManage {
-                        MhSymbolButton("MhTrash", beschreibung: "Favorit löschen", farbe: Mh.textTertiary) {
-                            confirmPrompt = Dialogs.deleteFavorite(favorite, store: store, toasts: toasts)
+        VStack(alignment: .leading, spacing: 0) {
+            Abschnittskopf("Favoriten von \(user.name)")
+            if !canManage {
+                Hinweistext("Favoriten löschen bietet die API in diesem Modus nur mit den erweiterten Server-Actions (Einstellungen).")
+                    .padding(.bottom, Mh.abstand3)
+            }
+            if store.favorites.isEmpty {
+                MhLeer("Noch keine Favoriten. In der Ansicht Heute über „Hinzufügen“ oder „Als Favorit speichern“ anlegen.")
+            } else {
+                ForEach(Array(store.favorites.enumerated()), id: \.element.id) { index, favorite in
+                    if index > 0 { MhTrennlinie() }
+                    HStack(spacing: Mh.abstand3) {
+                        Text(favorite.getraenk)
+                            .mhText(.body)
+                            .foregroundStyle(Mh.textStrong)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(verbatim: "\(favorite.mengeMl) ml")
+                            .mhText(.body)
+                            .monospacedDigit()
+                            .foregroundStyle(Mh.text)
+                        if canManage {
+                            MhSymbolButton("MhTrash", beschreibung: "Favorit löschen", farbe: Mh.textTertiary) {
+                                confirmPrompt = Dialogs.deleteFavorite(favorite, store: store, toasts: toasts)
+                            }
                         }
                     }
+                    .frame(minHeight: 52)
                 }
-                .frame(minHeight: 52)
-            }
-            if canManage {
-                Hinweistext("Andere Nutzer in der Ansicht Heute auswählen, um deren Favoriten zu bearbeiten.")
-                    .padding(.top, Mh.abstand3)
+                if canManage {
+                    Hinweistext("Andere Nutzer in der Ansicht Heute auswählen, um deren Favoriten zu bearbeiten.")
+                        .padding(.top, Mh.abstand3)
+                }
             }
         }
     }

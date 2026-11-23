@@ -10,6 +10,7 @@ import SwiftUI
 /// weil die API keine Tagesreihe liefert.
 struct StatsView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -27,6 +28,10 @@ struct StatsView: View {
         let ziel = user.tageszielMl
         let woche = DayValue.lastDays(7, perDay: perDay)
         let monat = DayValue.lastDays(30, perDay: perDay)
+        // Bei sehr großer Schrift stehen die drei Summen untereinander.
+        let summen = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Mh.abstand4))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Mh.abstand3))
 
         OfflineBanner(isOffline: store.isOffline, pendingCount: store.pendingCount) {
             Task { await store.flushQueue() }
@@ -46,7 +51,7 @@ struct StatsView: View {
         Hinweistext(ziel == 0 ? "\(user.name) · kein Tagesziel festgelegt" : "\(user.name) · Tagesziel \(ziel) ml")
             .padding(.bottom, Mh.abstand5)
 
-        HStack(alignment: .top, spacing: Mh.abstand3) {
+        summen {
             Summe(label: "Heute", stats: store.stats.today)
             Summe(label: "Woche", stats: store.stats.week)
             Summe(label: "Monat", stats: store.stats.month)
@@ -207,10 +212,13 @@ private struct WeekBars: View {
                     .foregroundStyle(tageszielMl > 0 && day.ml >= tageszielMl ? Mh.data2 : Mh.data1)
                     .cornerRadius(4)
                     .annotation(position: .top, spacing: Mh.abstand1) {
+                        // Grund hinter der Zahl, damit sie über der Ziel-Linie lesbar bleibt.
                         Text(verbatim: "\(day.ml)")
                             .font(achsenSchrift)
                             .monospacedDigit()
                             .foregroundStyle(Mh.text)
+                            .padding(.horizontal, 2)
+                            .background(Mh.bg)
                     }
             }
             if tageszielMl > 0 {
@@ -257,12 +265,23 @@ private struct MonthLine: View {
         }
         .chartXAxis(.hidden)
         .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
                 AxisGridLine().foregroundStyle(Mh.border)
-                AxisValueLabel().foregroundStyle(Mh.textSecondary).font(achsenSchrift)
+                // Eigener Text statt Standardformat: ohne Tausendertrennzeichen (AGENTS.md Regel 9).
+                AxisValueLabel {
+                    Text(verbatim: Self.achsenText(value))
+                        .font(achsenSchrift)
+                        .foregroundStyle(Mh.textSecondary)
+                }
             }
         }
         .chartYScale(domain: 0...Double(max(days.map(\.ml).max() ?? 0, tageszielMl, 1)) * 1.1)
         .frame(height: 180)
+    }
+
+    private static func achsenText(_ value: AxisValue) -> String {
+        if let zahl = value.as(Int.self) { return String(zahl) }
+        if let zahl = value.as(Double.self) { return String(Int(zahl.rounded())) }
+        return ""
     }
 }

@@ -96,6 +96,7 @@ struct RootView: View {
 /// Titel dort), als erster Inhalt der Kopf mit H1 links und optional einer
 /// kleinen Hauptaktion rechts (wie `ui_kopf()` mit Zurück-Link im Web).
 struct Unterseitenrahmen<Inhalt: View, Hauptaktion: View>: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let titel: String
     var untertitel: String?
     @ViewBuilder var inhalt: () -> Inhalt
@@ -116,7 +117,15 @@ struct Unterseitenrahmen<Inhalt: View, Hauptaktion: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                MhKopf(titel, untertitel: untertitel, hauptaktion: hauptaktion)
+                if typeSize.isAccessibilitySize {
+                    // Sehr große Schrift: Hauptaktion unter dem Titel, damit
+                    // weder Titel noch Knopf abgeschnitten werden.
+                    MhKopf(titel, untertitel: untertitel)
+                    VStack(alignment: .leading, spacing: 0) { hauptaktion() }
+                        .padding(.bottom, Mh.abstand3)
+                } else {
+                    MhKopf(titel, untertitel: untertitel, hauptaktion: hauptaktion)
+                }
                 inhalt()
             }
             .padding(.bottom, Mh.abstand8)
