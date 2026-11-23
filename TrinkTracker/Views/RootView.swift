@@ -35,7 +35,13 @@ struct RootView: View {
         .tint(c.isDark ? c.green300 : c.green600)
         .background(c.background)
         .overlay(ToastOverlay(toast: toasts.current))
-        .task { await store.refresh() }
+        .task {
+            #if DEBUG
+            // Nur mit `-MhBildschirmfotos 1` (UI-Test): erfundene Testdaten.
+            await Bildschirmfotodaten.einspielen(settings: store.settings)
+            #endif
+            await store.refresh()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 // Beim Zurückkehren nachschicken, was offline liegen geblieben ist.

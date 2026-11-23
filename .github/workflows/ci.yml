@@ -1,0 +1,110 @@
+name: CI
+
+# Bauen und die vorhandenen Unit-Tests (Swift Testing, TrinkTrackerTests) im
+# iOS-Simulator ausführen – ohne Signatur. Dazu ein Release-Build, damit auch
+# der Code außerhalb von `#if DEBUG` übersetzt wird. Kein Upload, kein Release.
+on:
+  push:
+    branches: ["claude/**"]
+  pull_request:
+
+jobs:
+  test:
+    name: Build und Unit-Tests (iOS-Simulator)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # Kein fester Gerätename: welche Simulatoren es gibt, hängt von der
+      # Xcode-Version des Runners ab. Genommen wird ein iPhone der neuesten
+      # vorhandenen iOS-Laufzeit.
+      - name: Simulator wählen
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          geraete = json.load(sys.stdin)["devices"]
+          def version(laufzeit):
+              return [int(z) for z in re.findall(r"\d+", laufzeit.split("iOS-")[-1])]
+          for laufzeit in sorted((l for l in geraete if "iOS-" in l), key=version, reverse=True):
+              for geraet in geraete[laufzeit]:
+                  if geraet["name"].startswith("iPhone"):
+                      print(geraet["udid"])
+                      print(geraet["name"], laufzeit, file=sys.stderr)
+                      sys.exit(0)
+          sys.exit("kein iPhone-Simulator gefunden")
+          ')
+          echo "SIMULATOR=$udid" >> "$GITHUB_ENV"
+
+      # Nur TrinkTrackerTests: die UI-Tests (ScreenshotTests) laufen im
+      # Workflow „Bildschirmfotos“.
+      - name: Bauen und Unit-Tests ausführen
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project TrinkTracker.xcodeproj \
+            -scheme TrinkTracker \
+            -destination "platform=iOS Simulator,id=$SIMULATOR" \
+            -only-testing:TrinkTrackerTests \
+            -parallel-testing-enabled NO \
+            -derivedDataPath DerivedData \
+            -resultBundlePath Ergebnis.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodebuild.log \
+            | grep -E "error:|✘|Test run with|Suite .* (passed|failed)|Executed [0-9]+ tests|\*\* (BUILD|TEST) " \
+            || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" xcodebuild.log
+
+      - name: Release-Build (generisches iOS, unsigniert)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project TrinkTracker.xcodeproj \
+            -scheme TrinkTracker \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath DerivedDataRelease \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee release.log \
+            | grep -E "error:|\*\* BUILD " || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" release.log
+
+      # Ziel laut AGENTS.md: null Compiler-Warnungen. Hier nur gezählt und
+      # aufgelistet, nicht als Fehler gewertet.
+      - name: Zusammenfassung (Tests und Warnungen)
+        if: always()
+        run: |
+          {
+            echo "### Unit-Tests"
+            xcrun xcresulttool get test-results summary --path Ergebnis.xcresult --compact 2>/dev/null \
+              | python3 -c '
+          import json, sys
+          bericht = json.load(sys.stdin)
+          print("Ergebnis:", bericht.get("result"), "· bestanden:", bericht.get("passedTests"),
+                "· fehlgeschlagen:", bericht.get("failedTests"), "· übersprungen:", bericht.get("skippedTests"))
+          for fehler in bericht.get("testFailures", []):
+              print("-", fehler.get("testName"), "::", fehler.get("failureText"))
+          ' || echo "kein Ergebnis-Bundle"
+            echo
+            echo "### Compiler-Warnungen (eindeutig)"
+            cat xcodebuild.log release.log 2>/dev/null | grep -E "^/.*\.swift:[0-9]+:[0-9]+: warning:" | sed -E 's#^.*/(TrinkTracker[^/]*/)#\1#' | sort -u > warnungen.txt || true
+            echo "Anzahl: $(wc -l < warnungen.txt | tr -d ' ')"
+            sed 's/^/- /' warnungen.txt | head -n 50
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Fehlerstellen aus den Build-Protokollen
+        if: failure()
+        run: grep -nE "error:|failed|BUILD FAILED|TEST FAILED" xcodebuild.log release.log | tail -n 80 || tail -n 120 xcodebuild.log
+
+      - name: Protokolle sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: protokolle
+          path: |
+            xcodebuild.log
+            release.log
+            warnungen.txt
+          if-no-files-found: ignore
